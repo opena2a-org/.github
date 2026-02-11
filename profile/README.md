@@ -10,7 +10,7 @@
 
 ---
 
-OpenA2A builds open-source tools for securing AI agents in production. AI agents are the fastest-growing category of non-human identities, and most organizations have no governance, no visibility, and no security controls around them. We're building the infrastructure to fix that -- identity management, runtime protection, security scanning, compliance benchmarks, and credential isolation. Everything is Apache-2.0, self-hostable, and designed to work independently or together.
+OpenA2A builds open-source tools for securing AI agents in production. AI agents are the fastest-growing category of non-human identities, and most organizations have no governance, no visibility, and no security controls around them. We're building the infrastructure to fix that -- identity management, runtime protection, security scanning, compliance benchmarks, and credential management for AI developer tools. Everything is Apache-2.0, self-hostable, and designed to work independently or together.
 
 ## Projects
 
@@ -20,7 +20,7 @@ OpenA2A builds open-source tools for securing AI agents in production. AI agents
 | **[HackMyAgent](https://github.com/opena2a-org/hackmyagent)** | Security scanner -- 147 checks, attack mode, auto-fix | `npx hackmyagent secure` |
 | **[OASB](https://github.com/opena2a-org/oasb)** | Open Agent Security Benchmark -- 182 attack scenarios | `npm install @opena2a/oasb` |
 | **[ARP](https://github.com/opena2a-org/arp)** | Agent Runtime Protection -- process, network, filesystem monitoring | `npm install @opena2a/arp` |
-| **[Secretless AI](https://github.com/opena2a-org/secretless-ai)** | Keep credentials out of AI context windows | `npx secretless-ai init` |
+| **[Secretless AI](https://github.com/opena2a-org/secretless-ai)** | Credential management for AI coding tools -- Claude Code, Cursor, Windsurf | `npx secretless-ai init` |
 | **[DVAA](https://github.com/opena2a-org/damn-vulnerable-ai-agent)** | Deliberately vulnerable AI agents for security training | `docker pull opena2a/dvaa` |
 
 ## How They Fit Together
@@ -29,7 +29,7 @@ OpenA2A builds open-source tools for securing AI agents in production. AI agents
 ┌──────────────────────────────────────────────────────────┐
 │                      Your AI Agent                        │
 │                                                           │
-│  Secretless AI  → Credentials never reach the LLM        │
+│  Secretless AI  → Credential management for dev tools     │
 │  AIM            → Identity, governance, access control    │
 │  ARP            → Runtime process/network/file monitoring │
 │  HackMyAgent    → Scan, harden, attack-test               │
