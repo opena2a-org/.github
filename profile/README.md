@@ -10,7 +10,7 @@
 
 ---
 
-OpenA2A builds open-source tools for securing AI agents in production. Identity management, runtime protection, security scanning, compliance benchmarks, and credential isolation -- each project solves a specific problem in the AI agent security stack. Everything is Apache-2.0, self-hostable, and designed to work independently or together.
+OpenA2A builds open-source tools for securing AI agents in production. AI agents are the fastest-growing category of non-human identities, and most organizations have no governance, no visibility, and no security controls around them. We're building the infrastructure to fix that -- identity management, runtime protection, security scanning, compliance benchmarks, and credential isolation. Everything is Apache-2.0, self-hostable, and designed to work independently or together.
 
 ## Projects
 
@@ -37,6 +37,23 @@ OpenA2A builds open-source tools for securing AI agents in production. Identity 
 │  DVAA           → Train your team on AI agent security    │
 └──────────────────────────────────────────────────────────┘
 ```
+
+## Upstream Contributions
+
+We contribute security fixes back to the open-source projects we depend on and audit.
+
+**[OpenClaw](https://github.com/openclaw/openclaw)** -- 8 security PRs (2 merged, 6 open):
+- Credential redaction in gateway config responses ([#9858](https://github.com/openclaw/openclaw/pull/9858))
+- Skill/plugin code safety scanner ([#9806](https://github.com/openclaw/openclaw/pull/9806))
+- Path traversal prevention in A2UI file serving ([#10525](https://github.com/openclaw/openclaw/pull/10525))
+- Security headers for gateway HTTP responses ([#10526](https://github.com/openclaw/openclaw/pull/10526))
+- Timing-safe comparison for hook token auth ([#10527](https://github.com/openclaw/openclaw/pull/10527))
+- Supply chain hardening with --ignore-scripts ([#10528](https://github.com/openclaw/openclaw/pull/10528))
+- File permission enforcement for credential files ([#10529](https://github.com/openclaw/openclaw/pull/10529))
+- Skill scanner false positive reduction ([#10530](https://github.com/openclaw/openclaw/pull/10530))
+
+**[Nanobot](https://github.com/HKUDS/nanobot)** -- 1 security PR (open):
+- Path traversal, XSS, and shell escape fixes ([#472](https://github.com/HKUDS/nanobot/pull/472))
 
 ## License
 
