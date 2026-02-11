@@ -10,6 +10,8 @@
 
 ---
 
+OpenA2A builds open-source tools for securing AI agents in production. Identity management, runtime protection, security scanning, compliance benchmarks, and credential isolation -- each project solves a specific problem in the AI agent security stack. Everything is Apache-2.0, self-hostable, and designed to work independently or together.
+
 ## Projects
 
 | Project | Description | Install |
