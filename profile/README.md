@@ -12,6 +12,15 @@
 
 OpenA2A builds open-source tools for securing AI agents in production. AI agents are the fastest-growing category of non-human identities, and most organizations have no governance, no visibility, and no security controls around them. We're building the infrastructure to fix that -- identity management, runtime protection, security scanning, compliance benchmarks, and credential management for AI developer tools. Everything is Apache-2.0, self-hostable, and designed to work independently or together.
 
+## Recent Updates
+
+| Date | Project | Change |
+|------|---------|--------|
+| Feb 19 | **OASB** | 40 AI-layer test scenarios added (222 total). Prompt, MCP, A2A scanning via ARP v0.2.0. |
+| Feb 19 | **ARP v0.2.0** | AI-layer interceptors, HTTP reverse proxy, 20 threat detection patterns. |
+| Feb 19 | **HackMyAgent** | MCP JSON-RPC and A2A attack modes -- 7 categories, 70 payloads. |
+| Feb 18 | **DVAA v0.4.0** | MCP JSON-RPC and A2A message endpoints. 10 agents across 3 protocols. |
+
 ## Projects
 
 | Project | Description | Install |
