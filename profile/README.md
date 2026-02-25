@@ -51,7 +51,7 @@ OpenA2A builds open-source tools for securing AI agents in production. AI agents
 
 We contribute security fixes back to the open-source projects we depend on and audit.
 
-**[OpenClaw](https://github.com/openclaw/openclaw)** -- 8 security PRs (2 merged, 6 open):
+**[OpenClaw](https://github.com/openclaw/openclaw)** -- 8 security PRs (7 merged, 1 open):
 - Credential redaction in gateway config responses ([#9858](https://github.com/openclaw/openclaw/pull/9858))
 - Skill/plugin code safety scanner ([#9806](https://github.com/openclaw/openclaw/pull/9806))
 - Path traversal prevention in A2UI file serving ([#10525](https://github.com/openclaw/openclaw/pull/10525))
