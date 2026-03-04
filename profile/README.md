@@ -27,29 +27,32 @@ OpenA2A builds open-source tools for securing AI agents in production. AI agents
 
 | Project | Description | Install |
 |---------|-------------|---------|
+| **[opena2a-cli](https://github.com/opena2a-org/opena2a)** | Unified CLI — scan, protect, guard, benchmark, scan-soul, identity. Entry point for all OpenA2A tools. | `npm install -g opena2a-cli` |
 | **[HackMyAgent](https://github.com/opena2a-org/hackmyagent)** | Security scanner — 147 checks, OASB-1 benchmark, OASB-2 composite, behavioral governance (scan-soul), attack mode | `npx hackmyagent secure` |
+| **[Secretless AI](https://github.com/opena2a-org/secretless-ai)** | Credential management for AI coding tools — Claude Code, Cursor, Windsurf | `npx secretless-ai init` |
 | **[AGS](https://github.com/opena2a-org/agent-governance-spec)** | Agent Governance Specification — 8 domains, 68 controls, templates for BASIC/TOOL-USING/AGENTIC/MULTI-AGENT tiers | `npx hackmyagent scan-soul` |
 | **[AIM](https://github.com/opena2a-org/agent-identity-management)** | Identity & access management for AI agents — Ed25519 keypairs, capability policies, audit logging | `pip install aim-sdk` |
 | **[OASB](https://github.com/opena2a-org/open-agent-security-benchmark)** | Open Agent Security Benchmark — OASB-1 (46 infra controls) + OASB-2 (68 governance controls), 222 test scenarios | `npm install @opena2a/oasb` |
 | **[ARP](https://github.com/opena2a-org/agent-runtime-protection)** | Agent Runtime Protection — process, network, filesystem monitoring | `npm install @opena2a/arp` |
-| **[Secretless AI](https://github.com/opena2a-org/secretless-ai)** | Credential management for AI coding tools — Claude Code, Cursor, Windsurf | `npx secretless-ai init` |
 | **[DVAA](https://github.com/opena2a-org/damn-vulnerable-ai-agent)** | Deliberately vulnerable AI agents for security training | `docker pull opena2a/dvaa` |
-| **[opena2a-cli](https://github.com/opena2a-org/opena2a)** | Unified CLI — scan, protect, guard, benchmark, scan-soul, identity | `npm install -g opena2a-cli` |
 
 ## How They Fit Together
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│                       Your AI Agent                          │
-│                                                              │
-│  Secretless AI  → Credential management for dev tools        │
-│  AIM            → Identity, governance, access control       │
-│  AGS / scan-soul→ Behavioral governance (SOUL.md, 68 ctrls)  │
-│  ARP            → Runtime process/network/file monitoring    │
-│  HackMyAgent    → Scan, harden, attack-test, OASB-1+2        │
-│  OASB           → Compliance benchmark (46+68 controls)      │
-│  DVAA           → Train your team on AI agent security       │
-└──────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│              opena2a-cli  (unified entry point)                 │
+│              npm install -g opena2a-cli                         │
+├─────────────────────────────────────────────────────────────────┤
+│                        Your AI Agent                            │
+│                                                                 │
+│  Secretless AI  → Credential management for dev tools           │
+│  AIM            → Identity, governance, access control          │
+│  AGS / scan-soul→ Behavioral governance (SOUL.md, 68 ctrls)     │
+│  ARP            → Runtime process/network/file monitoring       │
+│  HackMyAgent    → Scan, harden, attack-test, OASB-1+2           │
+│  OASB           → Compliance benchmark (46+68 controls)         │
+│  DVAA           → Train your team on AI agent security          │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 ## Upstream Contributions
