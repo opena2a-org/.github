@@ -1,3 +1,5 @@
+**[OpenA2A](https://github.com/opena2a-org)**: [HackMyAgent](https://github.com/opena2a-org/hackmyagent) · [Secretless AI](https://github.com/opena2a-org/secretless-ai) · [AIM](https://github.com/opena2a-org/agent-identity-management) · [ARP](https://github.com/opena2a-org/hackmyagent) · [OASB](https://github.com/opena2a-org/hackmyagent) · [AGS](https://github.com/opena2a-org/hackmyagent) · [DVAA](https://github.com/opena2a-org/hackmyagent) · [Browser Guard](https://github.com/opena2a-org/ai-browserguard) · [Registry](https://registry.opena2a.org)
+
 <div align="center">
 
 # OpenA2A
@@ -28,13 +30,20 @@ OpenA2A builds open-source tools for securing AI agents in production. AI agents
 | Project | Description | Install |
 |---------|-------------|---------|
 | **[opena2a-cli](https://github.com/opena2a-org/opena2a)** | Unified CLI — scan, protect, guard, benchmark, scan-soul, identity. Entry point for all OpenA2A tools. | `npm install -g opena2a-cli` |
-| **[HackMyAgent](https://github.com/opena2a-org/hackmyagent)** | Security scanner — 147 checks, OASB-1 benchmark, OASB-2 composite, behavioral governance (scan-soul), attack mode | `npx hackmyagent secure` |
+| **[HackMyAgent](https://github.com/opena2a-org/hackmyagent)** | Security scanner — 150+ checks, OASB benchmarks, attack simulation, ARP runtime protection, AGS behavioral governance | `npx hackmyagent secure` |
 | **[Secretless AI](https://github.com/opena2a-org/secretless-ai)** | Credential management for AI coding tools — Claude Code, Cursor, Windsurf | `npx secretless-ai init` |
-| **[AGS](https://github.com/opena2a-org/agent-governance-spec)** | Agent Governance Specification — 8 domains, 68 controls, templates for BASIC/TOOL-USING/AGENTIC/MULTI-AGENT tiers | `npx hackmyagent scan-soul` |
 | **[AIM](https://github.com/opena2a-org/agent-identity-management)** | Identity & access management for AI agents — Ed25519 keypairs, capability policies, audit logging | `pip install aim-sdk` |
-| **[OASB](https://github.com/opena2a-org/open-agent-security-benchmark)** | Open Agent Security Benchmark — OASB-1 (46 infra controls) + OASB-2 (68 governance controls), 222 test scenarios | `npm install @opena2a/oasb` |
-| **[ARP](merged into HackMyAgent** | Agent Runtime Protection — process, network, filesystem monitoring | `npx hackmyagent shield` |
-| **[DVAA](merged into HackMyAgent)** | Deliberately vulnerable AI agents for security training | `docker pull opena2a/dvaa` |
+| **[Browser Guard](https://github.com/opena2a-org/ai-browserguard)** | Browser extension for AI agent detection and protection | Chrome Web Store |
+| **[Trust Registry](https://registry.opena2a.org)** | Supply chain verification and trust scores | `registry.opena2a.org` |
+
+### Included in HackMyAgent
+
+| Component | Description | CLI Command |
+|-----------|-------------|-------------|
+| **ARP** | Agent Runtime Protection — process, network, filesystem monitoring | `opena2a runtime` |
+| **AGS** | Agent Governance Specification — behavioral governance, SOUL.md, 68 controls | `opena2a scan-soul` |
+| **OASB** | Open Agent Security Benchmark — OASB-1 + OASB-2, 222 test scenarios | `opena2a benchmark oasb-2` |
+| **DVAA** | Deliberately vulnerable AI agents for security training | `opena2a train` |
 
 ## How They Fit Together
 
@@ -45,13 +54,15 @@ OpenA2A builds open-source tools for securing AI agents in production. AI agents
 ├─────────────────────────────────────────────────────────────────┤
 │                        Your AI Agent                            │
 │                                                                 │
-│  Secretless AI  → Credential management for dev tools           │
-│  AIM            → Identity, governance, access control          │
-│  AGS / scan-soul→ Behavioral governance (SOUL.md, 68 ctrls)     │
-│  ARP            → Runtime process/network/file monitoring       │
-│  HackMyAgent    → Scan, harden, attack-test, OASB-1+2           │
-│  OASB           → Compliance benchmark (46+68 controls)         │
-│  DVAA           → Train your team on AI agent security          │
+│  Secretless AI   → Credential management for dev tools          │
+│  AIM             → Identity, governance, access control         │
+│  HackMyAgent     → Scan, harden, attack-test                    │
+│    ├─ ARP        → Runtime process/network/file monitoring      │
+│    ├─ AGS        → Behavioral governance (SOUL.md, 68 ctrls)    │
+│    ├─ OASB       → Compliance benchmark (222 test scenarios)    │
+│    └─ DVAA       → Train your team on AI agent security         │
+│  Browser Guard   → AI agent detection in browser sessions       │
+│  Trust Registry  → Supply chain verification and trust scores   │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
