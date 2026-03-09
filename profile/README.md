@@ -1,4 +1,4 @@
-**[OpenA2A](https://github.com/opena2a-org)**: [HackMyAgent](https://github.com/opena2a-org/hackmyagent) · [Secretless AI](https://github.com/opena2a-org/secretless-ai) · [AIM](https://github.com/opena2a-org/agent-identity-management) · [ARP](https://github.com/opena2a-org/hackmyagent) · [OASB](https://github.com/opena2a-org/hackmyagent) · [AGS](https://github.com/opena2a-org/hackmyagent) · [DVAA](https://github.com/opena2a-org/damn-vulnerable-ai-agent) · [Browser Guard](https://github.com/opena2a-org/ai-browserguard) · [Registry](https://registry.opena2a.org)
+**[OpenA2A](https://github.com/opena2a-org)**: [HackMyAgent](https://github.com/opena2a-org/hackmyagent) · [Secretless AI](https://github.com/opena2a-org/secretless-ai) · [AIM](https://github.com/opena2a-org/agent-identity-management) · [ARP](https://github.com/opena2a-org/hackmyagent) · [OASB](https://github.com/opena2a-org/hackmyagent) · [AGS](https://github.com/opena2a-org/hackmyagent) · [DVAA](https://github.com/opena2a-org/hackmyagent) · [Browser Guard](https://github.com/opena2a-org/ai-browserguard) · [Registry](https://registry.opena2a.org)
 
 <div align="center">
 
@@ -33,7 +33,6 @@ OpenA2A builds open-source tools for securing AI agents in production. AI agents
 | **[HackMyAgent](https://github.com/opena2a-org/hackmyagent)** | Security scanner — 150+ checks, OASB benchmarks, attack simulation, ARP runtime protection, AGS behavioral governance | `npx hackmyagent secure` |
 | **[Secretless AI](https://github.com/opena2a-org/secretless-ai)** | Credential management for AI coding tools — Claude Code, Cursor, Windsurf | `npx secretless-ai init` |
 | **[AIM](https://github.com/opena2a-org/agent-identity-management)** | Identity & access management for AI agents — Ed25519 keypairs, capability policies, audit logging | `pip install aim-sdk` |
-| **[DVAA](https://github.com/opena2a-org/damn-vulnerable-ai-agent)** | Deliberately vulnerable AI agents for security training | `docker pull opena2a/dvaa` |
 | **[Browser Guard](https://github.com/opena2a-org/ai-browserguard)** | Browser extension for AI agent detection and protection | Chrome Web Store |
 | **[Trust Registry](https://registry.opena2a.org)** | Supply chain verification and trust scores | `registry.opena2a.org` |
 
@@ -44,6 +43,7 @@ OpenA2A builds open-source tools for securing AI agents in production. AI agents
 | **ARP** | Agent Runtime Protection — process, network, filesystem monitoring | `opena2a runtime` |
 | **AGS** | Agent Governance Specification — behavioral governance, SOUL.md, 68 controls | `opena2a scan-soul` |
 | **OASB** | Open Agent Security Benchmark — OASB-1 + OASB-2, 222 test scenarios | `opena2a benchmark oasb-2` |
+| **DVAA** | Deliberately vulnerable AI agents for security training | `opena2a train` |
 
 ## How They Fit Together
 
@@ -59,8 +59,8 @@ OpenA2A builds open-source tools for securing AI agents in production. AI agents
 │  HackMyAgent     → Scan, harden, attack-test                    │
 │    ├─ ARP        → Runtime process/network/file monitoring      │
 │    ├─ AGS        → Behavioral governance (SOUL.md, 68 ctrls)    │
-│    └─ OASB       → Compliance benchmark (222 test scenarios)    │
-│  DVAA            → Train your team on AI agent security         │
+│    ├─ OASB       → Compliance benchmark (222 test scenarios)    │
+│    └─ DVAA       → Train your team on AI agent security         │
 │  Browser Guard   → AI agent detection in browser sessions       │
 │  Trust Registry  → Supply chain verification and trust scores   │
 └─────────────────────────────────────────────────────────────────┘
