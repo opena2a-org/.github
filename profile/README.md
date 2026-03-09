@@ -33,8 +33,8 @@ OpenA2A builds open-source tools for securing AI agents in production. AI agents
 | **[AGS](https://github.com/opena2a-org/agent-governance-spec)** | Agent Governance Specification — 8 domains, 68 controls, templates for BASIC/TOOL-USING/AGENTIC/MULTI-AGENT tiers | `npx hackmyagent scan-soul` |
 | **[AIM](https://github.com/opena2a-org/agent-identity-management)** | Identity & access management for AI agents — Ed25519 keypairs, capability policies, audit logging | `pip install aim-sdk` |
 | **[OASB](https://github.com/opena2a-org/open-agent-security-benchmark)** | Open Agent Security Benchmark — OASB-1 (46 infra controls) + OASB-2 (68 governance controls), 222 test scenarios | `npm install @opena2a/oasb` |
-| **[ARP](https://github.com/opena2a-org/agent-runtime-protection)** | Agent Runtime Protection — process, network, filesystem monitoring | `npm install @opena2a/arp` |
-| **[DVAA](https://github.com/opena2a-org/damn-vulnerable-ai-agent)** | Deliberately vulnerable AI agents for security training | `docker pull opena2a/dvaa` |
+| **[ARP](merged into HackMyAgent** | Agent Runtime Protection — process, network, filesystem monitoring | `npm install @opena2a/arp` |
+| **[DVAA](merged into HackMyAgent)** | Deliberately vulnerable AI agents for security training | `docker pull opena2a/dvaa` |
 
 ## How They Fit Together
 
