@@ -1,4 +1,4 @@
-**[OpenA2A](https://github.com/opena2a-org)**: [HackMyAgent](https://github.com/opena2a-org/hackmyagent) · [Secretless AI](https://github.com/opena2a-org/secretless-ai) · [AIM](https://github.com/opena2a-org/agent-identity-management) · [ARP](https://github.com/opena2a-org/hackmyagent) · [OASB](https://github.com/opena2a-org/hackmyagent) · [AGS](https://github.com/opena2a-org/hackmyagent) · [DVAA](https://github.com/opena2a-org/hackmyagent) · [Browser Guard](https://github.com/opena2a-org/ai-browserguard) · [Registry](https://registry.opena2a.org)
+**[OpenA2A](https://github.com/opena2a-org)**: [HackMyAgent](https://github.com/opena2a-org/hackmyagent) · [Secretless AI](https://github.com/opena2a-org/secretless-ai) · [AIM](https://github.com/opena2a-org/agent-identity-management) · [Browser Guard](https://github.com/opena2a-org/ai-browserguard)
 
 <div align="center">
 
