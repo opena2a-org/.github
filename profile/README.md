@@ -22,7 +22,7 @@ OpenA2A builds open-source tools for securing AI agents in production. AI agents
 | Mar 5 | **opena2a-cli v0.5.3** | Workspace binary resolution, graceful backend fallback, vault migration fix. |
 | Mar 5 | **Secretless AI v0.11.4** | HashiCorp Vault backend, graceful fallback when 1Password/Vault unavailable, `strict` mode for migrations. |
 | Mar 4 | **HackMyAgent v0.9.8** | OASB-2 composite scoring, `--deep` LLM semantic analysis, `scan-soul`/`harden-soul` commands, CLI prefix detection. |
-| Mar 4 | **AGS v1.0** | Agent Governance Specification -- behavioral safety framework, 9 domains, 72 controls, templates for all 4 agent tiers. |
+| Mar 4 | **ABGS v1.0** | Agent Behavioral Governance Specification -- behavioral safety framework, 9 domains, 72 controls, templates for all 4 agent tiers. |
 | Feb 19 | **OASB** | 40 AI-layer test scenarios added (222 total). Prompt, MCP, A2A scanning via ARP v0.2.0. |
 
 ## Projects
@@ -50,7 +50,7 @@ OpenA2A builds open-source tools for securing AI agents in production. AI agents
 | Component | Description | CLI Command |
 |-----------|-------------|-------------|
 | **ARP** | Agent Runtime Protection -- process, network, filesystem monitoring | `opena2a runtime` |
-| **[AGS](https://github.com/opena2a-org/oasb)** | Agent Governance Specification -- behavioral governance, SOUL.md, 72 controls | `opena2a scan-soul` |
+| **[ABGS](https://github.com/opena2a-org/oasb)** | Agent Behavioral Governance Specification -- behavioral governance, SOUL.md, 72 controls | `opena2a scan-soul` |
 | **[OASB](https://oasb.ai)** | Open Agent Security Benchmark -- OASB-1 + OASB-2, 222 test scenarios | `opena2a benchmark oasb-2` |
 | **[DVAA](https://github.com/opena2a-org/damn-vulnerable-ai-agent)** | Deliberately vulnerable AI agents for security training | `opena2a train` |
 
@@ -67,7 +67,7 @@ OpenA2A builds open-source tools for securing AI agents in production. AI agents
 │  AIM             -> Identity, governance, access control          │
 │  HackMyAgent     -> Scan, harden, attack-test                     │
 │    |-- ARP       -> Runtime process/network/file monitoring       │
-│    |-- AGS       -> Behavioral governance (SOUL.md, 72 ctrls)    │
+│    |-- ABGS      -> Behavioral governance (SOUL.md, 72 ctrls)    │
 │    |-- OASB      -> Compliance benchmark (222 test scenarios)     │
 │    +-- DVAA      -> Train your team on AI agent security          │
 │  Browser Guard   -> AI agent detection in browser sessions        │
