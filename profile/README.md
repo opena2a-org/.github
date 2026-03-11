@@ -18,6 +18,8 @@ OpenA2A builds open-source tools for securing AI agents in production. AI agents
 
 | Date | Project | Change |
 |------|---------|--------|
+| Mar 11 | **HackMyAgent v0.9.9** | ARP threat pattern fixes (PI-001, JB-001, DE-002), A2A proxy content extraction, runtime protection improvements. |
+| Mar 11 | **opena2a-cli v0.5.5** | Runtime command fixes, Shield HMA version detection, identity docs. |
 | Mar 10 | **OASB-2** | [Agent Soul specification](https://oasb.ai/oasb-2) published -- 72 behavioral governance controls across 9 domains, 4 agent tiers, 4 conformance levels. |
 | Mar 5 | **opena2a-cli v0.5.3** | Workspace binary resolution, graceful backend fallback, vault migration fix. |
 | Mar 5 | **Secretless AI v0.11.4** | HashiCorp Vault backend, graceful fallback when 1Password/Vault unavailable, `strict` mode for migrations. |
