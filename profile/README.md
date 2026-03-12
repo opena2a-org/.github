@@ -48,7 +48,7 @@ Open-source infrastructure for securing AI agents -- identity management, runtim
 │  HackMyAgent     -> Scan, harden, attack-test                   │
 │    |-- ARP       -> Runtime process/network/file monitoring     │
 │    |-- ABGS      -> Behavioral governance (SOUL.md, 72 ctrls)   │
-│    |-- OASB      -> Compliance benchmark (182 attack scenarios) │
+│    |-- OASB      -> Compliance benchmark (222 test scenarios)   │
 │    +-- DVAA      -> Train your team on AI agent security        │
 │  Browser Guard   -> AI agent detection in browser sessions      │
 │  Trust Registry  -> Supply chain verification (coming soon)     │
