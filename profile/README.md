@@ -33,7 +33,7 @@ OpenA2A builds open-source tools for securing AI agents in production. AI agents
 |---------|-------------|---------|
 | **[opena2a-cli](https://github.com/opena2a-org/opena2a)** | Unified CLI -- scan, protect, guard, benchmark, review, shield. Entry point for all OpenA2A tools. | `npm install -g opena2a-cli` |
 | **[HackMyAgent](https://github.com/opena2a-org/hackmyagent)** | Security scanner -- 150+ checks, OASB benchmarks, attack simulation, runtime protection, behavioral governance | `npx hackmyagent secure` |
-| **[Secretless AI](https://github.com/opena2a-org/secretless-ai)** | Credential management for AI coding tools -- Claude Code, Cursor, Windsurf. 4 backends (local, keychain, 1Password, Vault). | `npx secretless-ai init` |
+| **[Secretless AI](https://github.com/opena2a-org/secretless-ai)** | Credential management for AI coding tools -- Claude Code, Cursor, Windsurf. 5 backends (local, keychain, 1Password, Vault, GCP Secret Manager). | `npx secretless-ai init` |
 | **[AIM](https://github.com/opena2a-org/agent-identity-management)** | Identity & access management for AI agents -- Ed25519 keypairs, capability policies, audit logging | Self-hosted (Go) |
 | **[AI Browser Guard](https://github.com/opena2a-org/AI-BrowserGuard)** | Browser extension for AI agent detection and control -- 4-layer detection, delegation engine | Chrome Web Store |
 | **[DVAA](https://github.com/opena2a-org/damn-vulnerable-ai-agent)** | Deliberately vulnerable AI agents for security training -- 10 agents across 3 protocols | `docker pull opena2a/dvaa` |
