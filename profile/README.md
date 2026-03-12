@@ -12,20 +12,7 @@
 
 ---
 
-OpenA2A builds open-source tools for securing AI agents in production. AI agents are the fastest-growing category of non-human identities, and most organizations have no governance, no visibility, and no security controls around them. We're building the infrastructure to fix that -- identity management, runtime protection, security scanning, compliance benchmarks, behavioral governance, and credential management for AI developer tools. Everything is Apache-2.0, self-hostable, and designed to work independently or together.
-
-## Recent Updates
-
-| Date | Project | Change |
-|------|---------|--------|
-| Mar 11 | **HackMyAgent v0.9.9** | ARP threat pattern fixes (PI-001, JB-001, DE-002), A2A proxy content extraction, runtime protection improvements. |
-| Mar 11 | **opena2a-cli v0.5.5** | Runtime command fixes, Shield HMA version detection, identity docs. |
-| Mar 10 | **OASB-2** | [Agent Soul specification](https://oasb.ai/oasb-2) published -- 72 behavioral governance controls across 9 domains, 4 agent tiers, 4 conformance levels. |
-| Mar 5 | **opena2a-cli v0.5.3** | Workspace binary resolution, graceful backend fallback, vault migration fix. |
-| Mar 5 | **Secretless AI v0.11.4** | HashiCorp Vault backend, graceful fallback when 1Password/Vault unavailable, `strict` mode for migrations. |
-| Mar 4 | **HackMyAgent v0.9.8** | OASB-2 composite scoring, `--deep` LLM semantic analysis, `scan-soul`/`harden-soul` commands, CLI prefix detection. |
-| Mar 4 | **ABGS v1.0** | Agent Behavioral Governance Specification -- behavioral safety framework, 9 domains, 72 controls, templates for all 4 agent tiers. |
-| Feb 19 | **OASB** | 40 AI-layer test scenarios added (222 total). Prompt, MCP, A2A scanning via ARP v0.2.0. |
+Open-source infrastructure for securing AI agents -- identity management, runtime protection, security scanning, compliance benchmarks, behavioral governance, and credential management. Apache-2.0, self-hostable, works independently or together.
 
 ## Projects
 
@@ -33,7 +20,7 @@ OpenA2A builds open-source tools for securing AI agents in production. AI agents
 |---------|-------------|---------|
 | **[opena2a-cli](https://github.com/opena2a-org/opena2a)** | Unified CLI -- scan, protect, guard, benchmark, review, shield. Entry point for all OpenA2A tools. | `npm install -g opena2a-cli` |
 | **[HackMyAgent](https://github.com/opena2a-org/hackmyagent)** | Security scanner -- 150+ checks, OASB benchmarks, attack simulation, runtime protection, behavioral governance | `npx hackmyagent secure` |
-| **[Secretless AI](https://github.com/opena2a-org/secretless-ai)** | Credential management for AI coding tools -- Claude Code, Cursor, Windsurf. 4 backends (local, keychain, 1Password, Vault). | `npx secretless-ai init` |
+| **[Secretless AI](https://github.com/opena2a-org/secretless-ai)** | Credential management for AI coding tools -- Claude Code, Cursor, Windsurf. 5 backends (local, keychain, 1Password, Vault, GCP Secret Manager). | `npx secretless-ai init` |
 | **[AIM](https://github.com/opena2a-org/agent-identity-management)** | Identity & access management for AI agents -- Ed25519 keypairs, capability policies, audit logging | Self-hosted (Go) |
 | **[AI Browser Guard](https://github.com/opena2a-org/AI-BrowserGuard)** | Browser extension for AI agent detection and control -- 4-layer detection, delegation engine | Chrome Web Store |
 | **[DVAA](https://github.com/opena2a-org/damn-vulnerable-ai-agent)** | Deliberately vulnerable AI agents for security training -- 10 agents across 3 protocols | `docker pull opena2a/dvaa` |
@@ -46,15 +33,6 @@ OpenA2A builds open-source tools for securing AI agents in production. AI agents
 | **[OASB-1](https://oasb.ai/oasb-1)** | Open Agent Security Benchmark -- 46 infrastructure security controls, L1/L2/L3 maturity levels | [oasb.ai/oasb-1](https://oasb.ai/oasb-1) |
 | **[OASB-2](https://oasb.ai/oasb-2)** | Agent Soul -- 72 behavioral governance controls, 9 domains, 4 agent tiers, 4 conformance levels | [oasb.ai/oasb-2](https://oasb.ai/oasb-2) |
 | **[OASB Eval](https://oasb.ai/eval)** | Security product evaluation -- 182 attack scenarios across 10 MITRE ATLAS techniques | [oasb.ai/eval](https://oasb.ai/eval) |
-
-### Included in HackMyAgent
-
-| Component | Description | CLI Command |
-|-----------|-------------|-------------|
-| **ARP** | Agent Runtime Protection -- process, network, filesystem monitoring | `opena2a runtime` |
-| **[ABGS](https://github.com/opena2a-org/oasb)** | Agent Behavioral Governance Specification -- behavioral governance, SOUL.md, 72 controls | `opena2a scan-soul` |
-| **[OASB](https://oasb.ai)** | Open Agent Security Benchmark -- OASB-1 + OASB-2, 222 test scenarios | `opena2a benchmark oasb-2` |
-| **[DVAA](https://github.com/opena2a-org/damn-vulnerable-ai-agent)** | Deliberately vulnerable AI agents for security training | `opena2a train` |
 
 ## How They Fit Together
 
@@ -93,6 +71,18 @@ We contribute security fixes back to the open-source projects we depend on and a
 
 **[Nanobot](https://github.com/HKUDS/nanobot)** -- 1 security PR (open):
 - Path traversal, XSS, and shell escape fixes ([#472](https://github.com/HKUDS/nanobot/pull/472))
+
+## Recent Updates
+
+| Date | Project | Change |
+|------|---------|--------|
+| Mar 12 | **Secretless AI v0.12.3** | Security hardening: scrypt key derivation, broker bearer auth, session HMAC integrity, OS keychain default. |
+| Mar 11 | **HackMyAgent v0.9.9** | ARP threat pattern fixes, A2A proxy content extraction, runtime protection improvements. |
+| Mar 11 | **opena2a-cli v0.5.5** | Runtime command fixes, Shield HMA version detection, identity docs. |
+| Mar 10 | **OASB-2** | [Agent Soul specification](https://oasb.ai/oasb-2) published -- 72 behavioral governance controls. |
+| Mar 5 | **Secretless AI v0.11.4** | HashiCorp Vault backend, graceful fallback, `strict` mode for migrations. |
+| Mar 4 | **HackMyAgent v0.9.8** | OASB-2 composite scoring, `--deep` LLM semantic analysis, `scan-soul`/`harden-soul` commands. |
+| Mar 4 | **ABGS v1.0** | Agent Behavioral Governance Specification -- 9 domains, 72 controls. |
 
 ## License
 
