@@ -30,9 +30,9 @@ Open-source infrastructure for securing AI agents -- identity management, runtim
 
 | Spec | Description | Website |
 |------|-------------|---------|
-| **[OASB-1](https://oasb.ai/oasb-1)** | Open Agent Security Benchmark -- 46 infrastructure security controls, L1/L2/L3 maturity levels | [oasb.ai/oasb-1](https://oasb.ai/oasb-1) |
-| **[OASB-2](https://oasb.ai/oasb-2)** | Agent Soul -- 72 behavioral governance controls, 9 domains, 4 agent tiers, 4 conformance levels | [oasb.ai/oasb-2](https://oasb.ai/oasb-2) |
-| **[OASB Eval](https://oasb.ai/eval)** | Security product evaluation -- 182 attack scenarios across 10 MITRE ATLAS techniques | [oasb.ai/eval](https://oasb.ai/eval) |
+| **[OASB-1](https://oasb.ai/oasb-1)** | 46 security controls across 10 domains, 3 maturity levels (Essential, Standard, Hardened) | [oasb.ai/oasb-1](https://oasb.ai/oasb-1) |
+| **[OASB-2](https://oasb.ai/oasb-2)** | Agent Soul -- behavioral governance controls across 9 domains, 4 agent tiers, 4 conformance levels | [oasb.ai/oasb-2](https://oasb.ai/oasb-2) |
+| **[OASB Eval](https://oasb.ai/eval)** | 182 attack scenarios across 10 MITRE ATLAS techniques for evaluating runtime security tools | [oasb.ai/eval](https://oasb.ai/eval) |
 
 ## How They Fit Together
 
@@ -48,7 +48,7 @@ Open-source infrastructure for securing AI agents -- identity management, runtim
 │  HackMyAgent     -> Scan, harden, attack-test                   │
 │    |-- ARP       -> Runtime process/network/file monitoring     │
 │    |-- ABGS      -> Behavioral governance (SOUL.md, 72 ctrls)   │
-│    |-- OASB      -> Compliance benchmark (222 test scenarios)   │
+│    |-- OASB      -> Compliance benchmark (182 attack scenarios) │
 │    +-- DVAA      -> Train your team on AI agent security        │
 │  Browser Guard   -> AI agent detection in browser sessions      │
 │  Trust Registry  -> Supply chain verification (coming soon)     │
