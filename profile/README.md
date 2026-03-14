@@ -79,7 +79,7 @@ We contribute security fixes back to the open-source projects we depend on and a
 | Mar 14 | **Secretless AI v0.12.4** | Fix `--only` flag case-insensitive matching in `run` command. |
 | Mar 12 | **Secretless AI v0.12.3** | Security hardening: scrypt key derivation, broker bearer auth, session HMAC integrity, OS keychain default. |
 | Mar 11 | **HackMyAgent v0.10.1** | ARP threat pattern fixes, A2A proxy content extraction, runtime protection improvements. |
-| Mar 11 | **opena2a-cli v0.5.5** | Runtime command fixes, Shield HMA version detection, identity docs. |
+| Mar 11 | **opena2a-cli v0.5.11** | Runtime command fixes, Shield HMA version detection, identity docs. |
 | Mar 10 | **OASB-2** | [Agent Soul specification](https://oasb.ai/oasb-2) published -- 72 behavioral governance controls. |
 | Mar 5 | **Secretless AI v0.11.4** | HashiCorp Vault backend, graceful fallback, `strict` mode for migrations. |
 | Mar 4 | **HackMyAgent v0.9.8** | OASB-2 composite scoring, `--deep` LLM semantic analysis, `scan-soul`/`harden-soul` commands. |
