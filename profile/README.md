@@ -55,8 +55,6 @@ We contribute security fixes back to the projects we audit — not just reports,
 - Security headers for gateway HTTP responses ([#10526](https://github.com/openclaw/openclaw/pull/10526))
 - Skill scanner false positive reduction ([#10530](https://github.com/openclaw/openclaw/pull/10530))
 
-**[Nanobot](https://github.com/HKUDS/nanobot)** — Path traversal, XSS, and shell escape fixes ([#472](https://github.com/HKUDS/nanobot/pull/472))
-
 ## Architecture
 
 ```
