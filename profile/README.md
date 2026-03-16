@@ -28,7 +28,7 @@ One command scans your project for shadow AI, credentials, config integrity, and
 | **[HackMyAgent](https://github.com/opena2a-org/hackmyagent)** | 163 security checks, 55 attack payloads, CVE detection, auto-fix | `npx hackmyagent secure` |
 | **[Secretless AI](https://github.com/opena2a-org/secretless-ai)** | Keep secrets out of AI tools — Claude Code, Cursor, Copilot, Windsurf | `npx secretless-ai init` |
 | **[AIM](https://github.com/opena2a-org/agent-identity-management)** | Cryptographic identity, capability policies, audit logging, trust scoring | `opena2a identity create` |
-| **[AI Browser Guard](https://github.com/opena2a-org/AI-BrowserGuard)** | Detect and control AI agents in the browser | [Chrome Web Store](https://chromewebstore.google.com/detail/ojphpdmabflmcjhglfogmkdgchkncikf) |
+| **[Browser Guard](https://github.com/opena2a-org/AI-BrowserGuard)** | Detect and control AI agents in the browser | [Chrome Web Store](https://chromewebstore.google.com/detail/ojphpdmabflmcjhglfogmkdgchkncikf) |
 | **[DVAA](https://github.com/opena2a-org/damn-vulnerable-ai-agent)** | Intentionally vulnerable AI agents for security training | `docker compose up` |
 
 ## Standards
