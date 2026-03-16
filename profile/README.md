@@ -20,22 +20,6 @@ npx opena2a-cli review
 
 One command scans your project for shadow AI, credentials, config integrity, and governance gaps. Opens an HTML dashboard with a security score.
 
-## Upstream Contributions
-
-We contribute security fixes back to the projects we audit — not just reports, production code.
-
-**[OpenClaw](https://github.com/openclaw/openclaw)** (205K+ stars) — 8 security PRs, 7 merged:
-- Credential redaction in gateway config responses ([#9858](https://github.com/openclaw/openclaw/pull/9858))
-- Skill/plugin code safety scanner — 1,721 lines ([#9806](https://github.com/openclaw/openclaw/pull/9806))
-- Path traversal prevention in A2UI file serving ([#10525](https://github.com/openclaw/openclaw/pull/10525))
-- Timing-safe comparison for hook token auth ([#10527](https://github.com/openclaw/openclaw/pull/10527))
-- Supply chain hardening with --ignore-scripts ([#10528](https://github.com/openclaw/openclaw/pull/10528))
-- File permission enforcement for credential files ([#10529](https://github.com/openclaw/openclaw/pull/10529))
-- Security headers for gateway HTTP responses ([#10526](https://github.com/openclaw/openclaw/pull/10526))
-- Skill scanner false positive reduction ([#10530](https://github.com/openclaw/openclaw/pull/10530))
-
-**[Nanobot](https://github.com/HKUDS/nanobot)** — Path traversal, XSS, and shell escape fixes ([#472](https://github.com/HKUDS/nanobot/pull/472))
-
 ## Tools
 
 | Tool | What it does | Try it |
@@ -56,6 +40,22 @@ We contribute security fixes back to the projects we audit — not just reports,
 | **[OASB Eval](https://oasb.ai/eval)** | 222 attack scenarios for evaluating AI security tools |
 | **[ABGS](https://github.com/opena2a-org/agent-governance-spec)** | Agent Behavioral Governance Specification — what goes in SOUL.md |
 | **[awesome-agent-souls](https://github.com/opena2a-org/awesome-agent-souls)** | 100+ SOUL.md templates by role, industry, and use case |
+
+## Upstream Contributions
+
+We contribute security fixes back to the projects we audit — not just reports, production code.
+
+**[OpenClaw](https://github.com/openclaw/openclaw)** (205K+ stars) — 8 security PRs, 7 merged:
+- Credential redaction in gateway config responses ([#9858](https://github.com/openclaw/openclaw/pull/9858))
+- Skill/plugin code safety scanner — 1,721 lines ([#9806](https://github.com/openclaw/openclaw/pull/9806))
+- Path traversal prevention in A2UI file serving ([#10525](https://github.com/openclaw/openclaw/pull/10525))
+- Timing-safe comparison for hook token auth ([#10527](https://github.com/openclaw/openclaw/pull/10527))
+- Supply chain hardening with --ignore-scripts ([#10528](https://github.com/openclaw/openclaw/pull/10528))
+- File permission enforcement for credential files ([#10529](https://github.com/openclaw/openclaw/pull/10529))
+- Security headers for gateway HTTP responses ([#10526](https://github.com/openclaw/openclaw/pull/10526))
+- Skill scanner false positive reduction ([#10530](https://github.com/openclaw/openclaw/pull/10530))
+
+**[Nanobot](https://github.com/HKUDS/nanobot)** — Path traversal, XSS, and shell escape fixes ([#472](https://github.com/HKUDS/nanobot/pull/472))
 
 ## Architecture
 
