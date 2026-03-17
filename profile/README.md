@@ -80,7 +80,7 @@ We contribute security fixes back to the projects we audit — not just reports,
 | Date | Update |
 |------|--------|
 | Mar 15 | **opena2a-cli v0.7.2** — Shadow AI detection with governance scoring, HTML reports, CSV export, `--registry` enrichment |
-| Mar 15 | **HackMyAgent v0.10.1** — 163 checks (up from 147), attack taxonomy, CVE-2026-25253 detection |
+| Mar 15 | **HackMyAgent v0.11.0** — 163 checks, 115 attack payloads, attack taxonomy, CVE-2026-25253 detection |
 | Mar 14 | **Secretless AI v0.12.4** — MCP server credential protection, broker auth hardening |
 | Mar 11 | **opena2a-cli v0.5.11** — Runtime command fixes, Shield improvements |
 | Mar 10 | **OASB-2** — Agent Soul specification published, 72 behavioral governance controls |
