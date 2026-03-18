@@ -79,6 +79,7 @@ We contribute security fixes back to the projects we audit — not just reports,
 
 | Date | Update |
 |------|--------|
+| Mar 18 | **opena2a-cli v0.8.0** -- OAuth device flow login (login/logout/whoami), search index updates |
 | Mar 15 | **opena2a-cli v0.7.2** — Shadow AI detection with governance scoring, HTML reports, CSV export, `--registry` enrichment |
 | Mar 15 | **HackMyAgent v0.11.0** — 163 checks, 115 attack payloads, attack taxonomy, CVE-2026-25253 detection |
 | Mar 14 | **Secretless AI v0.12.4** — MCP server credential protection, broker auth hardening |
