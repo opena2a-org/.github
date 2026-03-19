@@ -4,7 +4,7 @@
 
 **The standard for AI agent security**
 
-[Website](https://opena2a.org) · [OASB Benchmark](https://oasb.ai) · [Registry](https://registry.opena2a.org) (April 2026) · [Discord](https://discord.gg/uRZa3KXgEn)
+[Website](https://opena2a.org) · [OASB Benchmark](https://oasb.ai) · [Discord](https://discord.gg/uRZa3KXgEn)
 
 </div>
 
@@ -80,7 +80,7 @@ We contribute security fixes back to the projects we audit — not just reports,
 | Date | Update |
 |------|--------|
 | Mar 18 | **opena2a-cli v0.8.7** -- OAuth login, identity lifecycle (suspend/revoke/reactivate), tag/MCP/activity management, server policies, detect --auto-scan |
-| Mar 15 | **opena2a-cli v0.7.2** — Shadow AI detection with governance scoring, HTML reports, CSV export, `--registry` enrichment |
+| Mar 15 | **opena2a-cli v0.7.2** — Shadow AI detection with governance scoring, HTML reports, CSV export, community trust data |
 | Mar 15 | **HackMyAgent v0.11.0** — 163 checks, 115 attack payloads, attack taxonomy, CVE-2026-25253 detection |
 | Mar 14 | **Secretless AI v0.12.4** — MCP server credential protection, broker auth hardening |
 | Mar 11 | **opena2a-cli v0.5.11** — Runtime command fixes, Shield improvements |
