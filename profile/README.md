@@ -79,6 +79,8 @@ We contribute security fixes back to the projects we audit — not just reports,
 
 | Date | Update |
 |------|--------|
+| Apr 8 | **opena2a-cli v0.8.19** — Runtime HMA version check, unified publish endpoint |
+| Apr 8 | **HackMyAgent v0.15.7** — GitHub repo scanning, unified publish endpoint |
 | Mar 18 | **opena2a-cli v0.8.7** -- OAuth login, identity lifecycle (suspend/revoke/reactivate), tag/MCP/activity management, server policies, detect --auto-scan |
 | Mar 15 | **opena2a-cli v0.7.2** — Shadow AI detection with governance scoring, HTML reports, CSV export, community trust data |
 | Mar 15 | **HackMyAgent v0.11.0** — 204 checks, 115 attack payloads, attack taxonomy, CVE-2026-25253 detection |
