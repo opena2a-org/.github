@@ -79,7 +79,7 @@ We contribute security fixes back to the projects we audit — not just reports,
 
 | Date | Update |
 |------|--------|
-| Apr 17 | **HackMyAgent v0.17.10** — `detect` Shadow AI audit command, `--nanomind` opt-in for AI-powered analysis, unified output across `secure`/`scan-soul`/`harden-soul`/`explain`, 209 checks + 29 semantic checks, 164 attack payloads across 16 categories |
+| Apr 17 | **HackMyAgent v0.17.11** — `detect` Shadow AI audit command, `--nanomind` opt-in for AI-powered analysis, unified output across `secure`/`scan-soul`/`harden-soul`/`explain`, 209 checks + 29 semantic checks, 164 attack payloads across 16 categories |
 | Apr 8 | **opena2a-cli v0.8.19** — Runtime HMA version check, unified publish endpoint |
 | Apr 8 | **HackMyAgent v0.15.7** — GitHub repo scanning, unified publish endpoint |
 | Mar 18 | **opena2a-cli v0.8.7** -- OAuth login, identity lifecycle (suspend/revoke/reactivate), tag/MCP/activity management, server policies, detect --auto-scan |
