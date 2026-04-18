@@ -25,7 +25,7 @@ One command scans your project for shadow AI, credentials, config integrity, and
 | Tool | What it does | Try it |
 |------|-------------|--------|
 | **[opena2a-cli](https://github.com/opena2a-org/opena2a)** | Unified CLI — shadow AI detection, identity, governance, scanning, protection | `npx opena2a-cli review` |
-| **[HackMyAgent](https://github.com/opena2a-org/hackmyagent)** | 204 security checks, 115 attack payloads, CVE detection, auto-fix | `npx hackmyagent secure` |
+| **[HackMyAgent](https://github.com/opena2a-org/hackmyagent)** | 209 security checks, 164 attack payloads, CVE detection, auto-fix | `npx hackmyagent secure` |
 | **[Secretless AI](https://github.com/opena2a-org/secretless-ai)** | Keep secrets out of AI tools — Claude Code, Cursor, Copilot, Windsurf | `npx secretless-ai init` |
 | **[AIM](https://github.com/opena2a-org/agent-identity-management)** | Cryptographic identity, capability policies, audit logging, trust scoring | `opena2a identity create` |
 | **[Browser Guard](https://github.com/opena2a-org/AI-BrowserGuard)** | Detect and control AI agents in the browser | [Chrome Web Store](https://chromewebstore.google.com/detail/ojphpdmabflmcjhglfogmkdgchkncikf) |
@@ -65,7 +65,7 @@ We contribute security fixes back to the projects we audit — not just reports,
 │                                                                  │
 │  opena2a detect         → Shadow AI discovery                    │
 │  opena2a identity       → AIM  (cryptographic identity)          │
-│  opena2a scan           → HackMyAgent  (204 security checks)     │
+│  opena2a scan           → HackMyAgent  (209 security checks)     │
 │  opena2a secrets        → Secretless AI (credential protection)  │
 │  opena2a mcp            → MCP server signing and trust           │
 │  opena2a benchmark      → OASB (222 attack scenarios)            │
@@ -79,11 +79,12 @@ We contribute security fixes back to the projects we audit — not just reports,
 
 | Date | Update |
 |------|--------|
+| Apr 17 | **HackMyAgent v0.17.10** — `detect` Shadow AI audit command, `--nanomind` opt-in for AI-powered analysis, unified output across `secure`/`scan-soul`/`harden-soul`/`explain`, 209 checks + 29 semantic checks, 164 attack payloads across 16 categories |
 | Apr 8 | **opena2a-cli v0.8.19** — Runtime HMA version check, unified publish endpoint |
 | Apr 8 | **HackMyAgent v0.15.7** — GitHub repo scanning, unified publish endpoint |
 | Mar 18 | **opena2a-cli v0.8.7** -- OAuth login, identity lifecycle (suspend/revoke/reactivate), tag/MCP/activity management, server policies, detect --auto-scan |
 | Mar 15 | **opena2a-cli v0.7.2** — Shadow AI detection with governance scoring, HTML reports, CSV export, community trust data |
-| Mar 15 | **HackMyAgent v0.11.0** — 204 checks, 115 attack payloads, attack taxonomy, CVE-2026-25253 detection |
+| Mar 15 | **HackMyAgent v0.11.0** — Attack taxonomy, CVE-2026-25253 detection |
 | Mar 14 | **Secretless AI v0.12.4** — MCP server credential protection, broker auth hardening |
 | Mar 11 | **opena2a-cli v0.5.11** — Runtime command fixes, Shield improvements |
 | Mar 10 | **OASB-2** — Agent Soul specification published, 72 behavioral governance controls |
