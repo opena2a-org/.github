@@ -24,12 +24,13 @@ One command scans your project for shadow AI, credentials, config integrity, and
 
 | Tool | What it does | Try it |
 |------|-------------|--------|
-| **[opena2a-cli](https://github.com/opena2a-org/opena2a)** | Unified CLI — shadow AI detection, identity, governance, scanning, protection | `npx opena2a-cli review` |
-| **[HackMyAgent](https://github.com/opena2a-org/hackmyagent)** | 209 security checks, 164 attack payloads, CVE detection, auto-fix | `npx hackmyagent secure` |
-| **[Secretless AI](https://github.com/opena2a-org/secretless-ai)** | Keep secrets out of AI tools — Claude Code, Cursor, Copilot, Windsurf | `npx secretless-ai init` |
-| **[AIM](https://github.com/opena2a-org/agent-identity-management)** | Cryptographic identity, capability policies, audit logging, trust scoring | `opena2a identity create` |
-| **[Browser Guard](https://github.com/opena2a-org/AI-BrowserGuard)** | Detect and control AI agents in the browser | [Chrome Web Store](https://chromewebstore.google.com/detail/ojphpdmabflmcjhglfogmkdgchkncikf) |
-| **[DVAA](https://github.com/opena2a-org/damn-vulnerable-ai-agent)** | Intentionally vulnerable AI agents for security training | `opena2a train start` |
+| **[opena2a-cli](https://github.com/opena2a-org/opena2a)** | Unified CLI. Shadow AI detection, identity, governance, scanning, protection. | `npx opena2a-cli review` |
+| **[HackMyAgent](https://github.com/opena2a-org/hackmyagent)** | 209 static checks, 29 NanoMind semantic checks, 164 attack payloads, auto-fix. | `npx hackmyagent secure` |
+| **[Secretless AI](https://github.com/opena2a-org/secretless-ai)** | Keep secrets out of AI tools: Claude Code, Cursor, Copilot, Windsurf. | `npx secretless-ai init` |
+| **[AIM](https://github.com/opena2a-org/agent-identity-management)** | Cryptographic identity, capability policies, audit logging, trust scoring. | `opena2a identity create` |
+| **[ai-trust](https://github.com/opena2a-org/ai-trust)** | Pre-install trust verification for AI packages: MCP servers, A2A agents, skills, AI tools. | `npx ai-trust check <pkg>` |
+| **[Browser Guard](https://github.com/opena2a-org/AI-BrowserGuard)** | Detect and control AI agents in the browser. | [Chrome Web Store](https://chromewebstore.google.com/detail/ojphpdmabflmcjhglfogmkdgchkncikf) |
+| **[DVAA](https://github.com/opena2a-org/damn-vulnerable-ai-agent)** | Intentionally vulnerable AI agents for security training. | `opena2a train start` |
 
 ## Standards
 
@@ -67,6 +68,7 @@ We contribute security fixes back to the projects we audit — not just reports,
 │  opena2a identity       → AIM  (cryptographic identity)          │
 │  opena2a scan           → HackMyAgent  (209 security checks)     │
 │  opena2a secrets        → Secretless AI (credential protection)  │
+│  opena2a trust          → ai-trust (pre-install trust check)     │
 │  opena2a mcp            → MCP server signing and trust           │
 │  opena2a benchmark      → OASB (222 attack scenarios)            │
 │  opena2a harden-soul    → ABGS (behavioral governance)           │
