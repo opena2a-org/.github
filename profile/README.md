@@ -1,98 +1,42 @@
-<div align="center">
+<p align="center">
+  <a href="https://opena2a.org">
+    <img src="https://opena2a.org/logo.png" alt="OpenA2A" width="320">
+  </a>
+</p>
 
-# OpenA2A
+<h1 align="center">OpenA2A</h1>
 
-**The standard for AI agent security**
+<p align="center"><strong>Security infrastructure for AI agents.</strong></p>
 
-[Website](https://opena2a.org) · [OASB Benchmark](https://oasb.ai) · [Discord](https://discord.gg/uRZa3KXgEn)
-
-</div>
+<p align="center">
+  <a href="https://opena2a.org">Website</a> ·
+  <a href="https://opena2a.org/projects">All projects</a> ·
+  <a href="https://oasb.ai">OASB Benchmark</a> ·
+  <a href="https://discord.gg/uRZa3KXgEn">Discord</a>
+</p>
 
 ---
 
-Open-source security infrastructure for AI agents. Identity management, runtime protection, security scanning, compliance benchmarks, behavioral governance, and credential management. Apache-2.0, self-hostable, works independently or together.
-
-## Start Here
+## Start here
 
 ```bash
 npx opena2a-cli review
 ```
 
-One command scans your project for shadow AI, credentials, config integrity, and governance gaps. Opens an HTML dashboard with a security score.
+One command scans your project for shadow AI, credentials, config integrity, and governance gaps. Returns an HTML dashboard with a security score.
 
-## Tools
+## The ecosystem
 
-| Tool | What it does | Try it |
-|------|-------------|--------|
-| **[opena2a-cli](https://github.com/opena2a-org/opena2a)** | Unified CLI. Shadow AI detection, identity, governance, scanning, protection. | `npx opena2a-cli review` |
-| **[HackMyAgent](https://github.com/opena2a-org/hackmyagent)** | 209 static checks, 29 NanoMind semantic checks, 164 attack payloads, auto-fix. | `npx hackmyagent secure` |
-| **[Secretless AI](https://github.com/opena2a-org/secretless-ai)** | Keep secrets out of AI tools: Claude Code, Cursor, Copilot, Windsurf. | `npx secretless-ai init` |
-| **[AIM](https://github.com/opena2a-org/agent-identity-management)** | Cryptographic identity, capability policies, audit logging, trust scoring. | `opena2a identity create` |
-| **[ai-trust](https://github.com/opena2a-org/ai-trust)** | Pre-install trust verification for AI packages: MCP servers, A2A agents, skills, AI tools. | `npx ai-trust check <pkg>` |
-| **[Browser Guard](https://github.com/opena2a-org/ai-browserguard)** | Detect and control AI agents in the browser. | [Chrome Web Store](https://chromewebstore.google.com/detail/ojphpdmabflmcjhglfogmkdgchkncikf) |
-| **[DVAA](https://github.com/opena2a-org/damn-vulnerable-ai-agent)** | Intentionally vulnerable AI agents for security training. | `opena2a train start` |
+[**opena2a.org/projects**](https://opena2a.org/projects) is the full catalog with install commands: 8 products, 10 standards, 13 upstream forks.
 
-## Standards
+Three GitHub organizations make up the stack:
 
-| Spec | What it defines |
-|------|----------------|
-| **[OASB-1](https://oasb.ai/oasb-1)** | 46 security controls across 10 categories, 3 maturity levels |
-| **[OASB-2](https://oasb.ai/oasb-2)** | Behavioral governance — 72 controls across 9 domains, 4 agent tiers |
-| **[OASB Eval](https://oasb.ai/eval)** | 222 attack scenarios for evaluating AI security tools |
-| **[ABGS](https://github.com/opena2a-org/agent-governance-spec)** | Agent Behavioral Governance Specification — what goes in SOUL.md |
-| **[awesome-agent-souls](https://github.com/opena2a-org/awesome-agent-souls)** | 100+ SOUL.md templates by role, industry, and use case |
-
-## Upstream Contributions
-
-We contribute security fixes back to the projects we audit — not just reports, production code.
-
-**[OpenClaw](https://github.com/openclaw/openclaw)** (205K+ stars) — 8 security PRs, 7 merged:
-- Credential redaction in gateway config responses ([#9858](https://github.com/openclaw/openclaw/pull/9858))
-- Skill/plugin code safety scanner — 1,721 lines ([#9806](https://github.com/openclaw/openclaw/pull/9806))
-- Path traversal prevention in A2UI file serving ([#10525](https://github.com/openclaw/openclaw/pull/10525))
-- Timing-safe comparison for hook token auth ([#10527](https://github.com/openclaw/openclaw/pull/10527))
-- Supply chain hardening with --ignore-scripts ([#10528](https://github.com/openclaw/openclaw/pull/10528))
-- File permission enforcement for credential files ([#10529](https://github.com/openclaw/openclaw/pull/10529))
-- Security headers for gateway HTTP responses ([#10526](https://github.com/openclaw/openclaw/pull/10526))
-- Skill scanner false positive reduction ([#10530](https://github.com/openclaw/openclaw/pull/10530))
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│              opena2a-cli  (unified entry point)                  │
-│              npx opena2a-cli review                              │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  opena2a detect         → Shadow AI discovery                    │
-│  opena2a identity       → AIM  (cryptographic identity)          │
-│  opena2a scan           → HackMyAgent  (209 security checks)     │
-│  opena2a secrets        → Secretless AI (credential protection)  │
-│  opena2a trust          → ai-trust (pre-install trust check)     │
-│  opena2a mcp            → MCP server signing and trust           │
-│  opena2a benchmark      → OASB (222 attack scenarios)            │
-│  opena2a harden-soul    → ABGS (behavioral governance)           │
-│  opena2a shield init    → All of the above, one command          │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-## Recent Updates
-
-| Date | Update |
-|------|--------|
-| Apr 17 | **HackMyAgent v0.17.11** — `detect` Shadow AI audit command, `--nanomind` opt-in for AI-powered analysis, unified output across `secure`/`scan-soul`/`harden-soul`/`explain`, 209 checks + 29 semantic checks, 164 attack payloads across 16 categories |
-| Apr 8 | **opena2a-cli v0.8.19** — Runtime HMA version check, unified publish endpoint |
-| Apr 8 | **HackMyAgent v0.15.7** — GitHub repo scanning, unified publish endpoint |
-| Mar 18 | **opena2a-cli v0.8.7** -- OAuth login, identity lifecycle (suspend/revoke/reactivate), tag/MCP/activity management, server policies, detect --auto-scan |
-| Mar 15 | **opena2a-cli v0.7.2** — Shadow AI detection with governance scoring, HTML reports, CSV export, community trust data |
-| Mar 15 | **HackMyAgent v0.11.0** — Attack taxonomy, CVE-2026-25253 detection |
-| Mar 14 | **Secretless AI v0.12.4** — MCP server credential protection, broker auth hardening |
-| Mar 11 | **opena2a-cli v0.5.11** — Runtime command fixes, Shield improvements |
-| Mar 10 | **OASB-2** — Agent Soul specification published, 72 behavioral governance controls |
-| Mar 5 | **Secretless AI v0.11.4** — HashiCorp Vault backend, graceful fallback |
-| Mar 4 | **ABGS v1.0** — Agent Behavioral Governance Specification, 9 domains, 72 controls |
+| Organization | What's there |
+|---|---|
+| **[opena2a-org](https://github.com/opena2a-org)** | Products you install. opena2a CLI, HackMyAgent, AIM, Secretless AI, ai-trust, NanoMind, Browser Guard, DVAA. |
+| **[opena2a-standards](https://github.com/opena2a-standards)** | Open specifications. Agent Threat Matrix, ATX credentials, identity and trust protocols, conformance suites. |
+| **[opena2a-upstream](https://github.com/opena2a-upstream)** | Forks of upstream projects. Security fixes flow back to maintainers. |
 
 ## License
 
-All tools are Apache-2.0.
+Apache 2.0 across the ecosystem, unless noted in individual repos.
