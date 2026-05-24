@@ -29,7 +29,7 @@ One command scans your project for shadow AI, credentials, config integrity, and
 | **[Secretless AI](https://github.com/opena2a-org/secretless-ai)** | Keep secrets out of AI tools: Claude Code, Cursor, Copilot, Windsurf. | `npx secretless-ai init` |
 | **[AIM](https://github.com/opena2a-org/agent-identity-management)** | Cryptographic identity, capability policies, audit logging, trust scoring. | `opena2a identity create` |
 | **[ai-trust](https://github.com/opena2a-org/ai-trust)** | Pre-install trust verification for AI packages: MCP servers, A2A agents, skills, AI tools. | `npx ai-trust check <pkg>` |
-| **[Browser Guard](https://github.com/opena2a-org/AI-BrowserGuard)** | Detect and control AI agents in the browser. | [Chrome Web Store](https://chromewebstore.google.com/detail/ojphpdmabflmcjhglfogmkdgchkncikf) |
+| **[Browser Guard](https://github.com/opena2a-org/ai-browserguard)** | Detect and control AI agents in the browser. | [Chrome Web Store](https://chromewebstore.google.com/detail/ojphpdmabflmcjhglfogmkdgchkncikf) |
 | **[DVAA](https://github.com/opena2a-org/damn-vulnerable-ai-agent)** | Intentionally vulnerable AI agents for security training. | `opena2a train start` |
 
 ## Standards
