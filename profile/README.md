@@ -4,9 +4,9 @@
 
 ---
 
-**OpenA2A** builds open security infrastructure for AI agents. Identity, runtime protection, scanning, behavioral governance, and credential management. Apache 2.0, self-hostable, works independently or together.
+OpenA2A builds the security and identity infrastructure the AI agent economy is missing. AI agents now act on people's behalf, calling APIs, moving money, executing tasks, without the identity, authorization, audit, and trust primitives traditional infrastructure has had for decades. OpenA2A fills that gap with open, self-hostable tools and open standards.
 
-The ecosystem spans three GitHub organizations: products to install, open specifications, and upstream forks where security fixes flow back to maintainers.
+Built by and for developers, security teams, and researchers working on AI agents. Apache 2.0 across the ecosystem. Security fixes from this work flow back to the upstream projects shaping the agent economy: Model Context Protocol, Agent2Agent, and the agent runtimes themselves.
 
 - [Browse all projects](https://opena2a.org/projects) for the full catalog with install commands
 - [Try the CLI](https://opena2a.org): `npx opena2a-cli review` finds shadow AI, credentials, and governance gaps
