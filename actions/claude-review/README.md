@@ -41,7 +41,7 @@ jobs:
       # ... build /tmp/system_prompt.txt and /tmp/user_msg.txt ...
 
       - id: review
-        uses: opena2a-org/.github/actions/claude-review@claude-review-v1
+        uses: opena2a-org/.github/actions/claude-review@6940df1
         with:
           anthropic-api-key: SECRET_REFERENCE   # your repo's Anthropic key secret
           system-prompt-file: /tmp/system_prompt.txt
@@ -67,10 +67,17 @@ files, `count_tokens` non-200 or unparseable, over budget, API non-200, no text
 blocks, or a reply with no verdict on its first line. Nothing resolves a failure
 into `APPROVE`.
 
-## Pin a tag, not `@main`
+## Pin the SHA, not `@main`
 
-`@main` moves every consuming repo the instant this file changes. Pin
-`@claude-review-v1`.
+`@main` moves every consuming repo the instant this file changes — a bad edit here
+would reach every merge gate in the org before anyone reviewed it.
+
+Pin the commit SHA: `@6940df1`. That is stronger than a tag, not a workaround for
+the absence of one — a tag can be moved to point at different code, a SHA cannot,
+which is why SHA pinning is the standard advice for actions.
+
+Bumping a consumer is then a visible one-line change in that repo's own PR, which
+is the point: no repo's gate changes without someone approving it there.
 
 ## Changing the model
 
