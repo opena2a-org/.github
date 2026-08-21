@@ -48,6 +48,21 @@ inputs:
     description: Output token cap for the review itself.
     required: false
     default: "4096"
+  thinking-budget:
+    description: >-
+      Extended-thinking budget in tokens. `0` disables thinking entirely. When
+      set, `max-tokens` must be strictly greater (the API requires it) or the run
+      is INCONCLUSIVE with that stated — discovering it as a 400 at review time
+      would be a silent gate outage. 8 of the 9 copies this action replaces used
+      10000, with `max-tokens: 16000`.
+    required: false
+    default: "0"
+  fallback-max-tokens:
+    description: >-
+      `max_tokens` for the retry that runs without thinking after a failed
+      primary. Only used when `thinking-budget` is non-zero.
+    required: false
+    default: "8192"
   nonce-placeholder:
     description: >-
       Token in the system prompt that is replaced with a per-run nonce. The
@@ -77,6 +92,13 @@ outputs:
   input-tokens:
     description: Measured input tokens, or empty when the measurement itself failed.
     value: ${{ steps.call.outputs.input_tokens }}
+  review-path:
+    description: >-
+      `primary` or `fallback` — which request produced the verdict. A fallback
+      that runs on every PR is indistinguishable from a primary that works, which
+      is how an invalid API version went unnoticed across nine repos, so callers
+      should surface this.
+    value: ${{ steps.call.outputs.review_path }}
 
 runs:
   using: composite
@@ -91,6 +113,8 @@ runs:
         MAX_TOKENS: ${{ inputs.max-tokens }}
         TOKEN_BUDGET: ${{ inputs.token-budget }}
         NONCE_PLACEHOLDER: ${{ inputs.nonce-placeholder }}
+        THINKING_BUDGET: ${{ inputs.thinking-budget }}
+        FALLBACK_MAX_TOKENS: ${{ inputs.fallback-max-tokens }}
       run: |
         set -euo pipefail
 
@@ -138,13 +162,34 @@ runs:
         RENDERED_SYSTEM=/tmp/claude_review_system.txt
         sed "s/$NONCE_PLACEHOLDER/$NONCE/g" "$SYSTEM_PROMPT_FILE" > "$RENDERED_SYSTEM"
 
-        jq -n \
-          --rawfile system "$RENDERED_SYSTEM" \
-          --rawfile user "$USER_MESSAGE_FILE" \
-          --arg model "$MODEL" \
-          --argjson max_tokens "$MAX_TOKENS" \
-          '{ model: $model, max_tokens: $max_tokens, system: $system,
-             messages: [{ role: "user", content: $user }] }' > /tmp/request.json
+        case "$THINKING_BUDGET" in
+          ''|*[!0-9]*) inconclusive "The review could not run: thinking-budget must be a number." ;;
+        esac
+
+        # The API requires max_tokens > thinking.budget_tokens. Refusing here, with
+        # the reason, beats discovering it as a 400 at review time -- that would be
+        # a required check failing for a cause nobody can see from the verdict.
+        if [ "$THINKING_BUDGET" -gt 0 ] && [ "$MAX_TOKENS" -le "$THINKING_BUDGET" ]; then
+          inconclusive "The review could not run: max-tokens ($MAX_TOKENS) must be greater than thinking-budget ($THINKING_BUDGET)."
+        fi
+
+        build_request() {
+          # $1 = thinking budget for THIS request (0 = off), $2 = max_tokens
+          if [ "$1" -gt 0 ]; then
+            jq -n --rawfile system "$RENDERED_SYSTEM" --rawfile user "$USER_MESSAGE_FILE" \
+              --arg model "$MODEL" --argjson max_tokens "$2" --argjson budget "$1" \
+              '{ model: $model, max_tokens: $max_tokens,
+                 thinking: { type: "enabled", budget_tokens: $budget },
+                 system: $system, messages: [{ role: "user", content: $user }] }'
+          else
+            jq -n --rawfile system "$RENDERED_SYSTEM" --rawfile user "$USER_MESSAGE_FILE" \
+              --arg model "$MODEL" --argjson max_tokens "$2" \
+              '{ model: $model, max_tokens: $max_tokens, system: $system,
+                 messages: [{ role: "user", content: $user }] }'
+          fi
+        }
+
+        build_request "$THINKING_BUDGET" "$MAX_TOKENS" > /tmp/request.json
 
         # MEASURE THE REQUEST THAT WILL ACTUALLY BE SENT, then decide. This
         # replaced a 120,000-BYTE cap. Bytes are the wrong instrument for a
@@ -157,6 +202,9 @@ runs:
         # HTTP 400), so it is deleted from the copy sent for measurement. That
         # is load-bearing: sent as-is it 400s on every run, and a 400 read as
         # "probably fits" would leave a gate in place that decided nothing.
+        # Only max_tokens is rejected. `thinking` is ACCEPTED and changes the count
+        # (measured: 14 -> 44 input tokens on a trivial request), so it stays --
+        # stripping it would measure a request that is not the one being sent.
         jq 'del(.max_tokens)' /tmp/request.json > /tmp/count_request.json
 
         CT_CODE=$(curl -s -o /tmp/count_response.json -w '%{http_code}' \
@@ -192,29 +240,49 @@ runs:
           inconclusive "This pull request is ${INPUT_TOKENS} input tokens, over the ${TOKEN_BUDGET} token review budget. It genuinely does not fit in the model's context window, so an automated verdict would describe only part of the change."
         fi
 
-        HTTP_CODE=$(curl -s -o /tmp/response.json -w '%{http_code}' \
-          -X POST "https://api.anthropic.com/v1/messages" \
-          -H "Content-Type: application/json" \
-          -H "x-api-key: ${REVIEW_API_KEY}" \
-          -H "anthropic-version: 2023-06-01" \
-          -d @/tmp/request.json)
+        send() {
+          curl -s -o /tmp/response.json -w '%{http_code}' \
+            -X POST "https://api.anthropic.com/v1/messages" \
+            -H "Content-Type: application/json" \
+            -H "x-api-key: ${REVIEW_API_KEY}" \
+            -H "anthropic-version: 2023-06-01" \
+            -d @"$1"
+        }
 
-        if [ "$HTTP_CODE" != "200" ]; then
-          ERROR=$(jq -r '.error.message // "no error message"' /tmp/response.json 2>/dev/null || echo "unreadable response body")
-          echo "::warning::Claude API call failed (HTTP $HTTP_CODE): $ERROR"
-          inconclusive "The automated review could not be completed (HTTP $HTTP_CODE: $ERROR)."
+        # EVERY text block, not content[0]. A multi-block reply silently lost
+        # everything after the first, and with thinking enabled content[0] IS a
+        # thinking block, so `.text` would be null and the review would come back
+        # empty. `(.content // [])` keeps an error body yielding empty rather than
+        # a jq error -- this must fail closed.
+        extract() {
+          jq -r '[(.content // [])[] | select(.type == "text") | .text] | join("\n")' /tmp/response.json 2>/dev/null || echo ""
+        }
+
+        REVIEW_PATH=primary
+        HTTP_CODE=$(send /tmp/request.json)
+        REVIEW_TEXT=""
+        [ "$HTTP_CODE" = "200" ] && REVIEW_TEXT=$(extract)
+
+        # FALLBACK: retry without thinking. Only when thinking was actually on --
+        # otherwise the retry is byte-identical to the request that just failed and
+        # is pure cost. The SAME nonce is reused: a fresh one would mean the model
+        # was told a different marker than the one being checked, so every fallback
+        # review would go INCONCLUSIVE.
+        if [ -z "$REVIEW_TEXT" ] && [ "$THINKING_BUDGET" -gt 0 ]; then
+          echo "::warning::Primary review request failed (HTTP $HTTP_CODE); retrying without extended thinking."
+          REVIEW_PATH=fallback
+          build_request 0 "$FALLBACK_MAX_TOKENS" > /tmp/request_fallback.json
+          HTTP_CODE=$(send /tmp/request_fallback.json)
+          [ "$HTTP_CODE" = "200" ] && REVIEW_TEXT=$(extract)
         fi
 
-        # EVERY text block, not content[0]. Two reasons, one already live: a
-        # multi-block reply silently lost everything after the first, so a long
-        # review was truncated with no signal; and if `model` is ever pointed at
-        # one that emits extended thinking, content[0] is a thinking block,
-        # .text is null, and the review comes back empty. `(.content // [])`
-        # keeps an error body yielding empty rather than a jq error, so the
-        # branch below still fires -- this must fail closed.
-        REVIEW_TEXT=$(jq -r '[(.content // [])[] | select(.type == "text") | .text] | join("\n")' /tmp/response.json 2>/dev/null || echo "")
+        echo "review_path=$REVIEW_PATH" >> "$GITHUB_OUTPUT"
+        echo "Review produced by the $REVIEW_PATH request."
+
         if [ -z "$REVIEW_TEXT" ]; then
-          inconclusive "The automated review returned no text content, so there is no verdict to report."
+          ERROR=$(jq -r '.error.message // "no error message"' /tmp/response.json 2>/dev/null || echo "unreadable response body")
+          echo "::warning::Claude API call produced no review (HTTP $HTTP_CODE): $ERROR"
+          inconclusive "The automated review could not be completed (HTTP $HTTP_CODE: $ERROR)."
         fi
 
         # Strip the marker line out of what gets posted. Echoing the nonce into a
