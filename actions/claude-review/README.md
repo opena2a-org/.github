@@ -114,6 +114,13 @@ files, `count_tokens` non-200 or unparseable, over budget, API non-200, no text
 blocks, or a reply with no verdict on its first line. Nothing resolves a failure
 into `APPROVE`.
 
+One failure happens *after* the model produced real findings: a reply whose verdict
+line is not first (a preamble is enough). On that path the verdict is `INCONCLUSIVE`
+as usual, but the model's text is **preserved** in `review-file` under the stated
+reason — the findings are exactly what the human who must now review needs, and the
+nonce has already been stripped from them. Every failure *before* a reply exists
+still replaces the body outright.
+
 ## Pin a SHA, not `@main`
 
 `@main` moves every consuming repo the instant this file changes — a bad edit here
@@ -146,8 +153,8 @@ Read the extraction note in `action.yml` first. The `token-budget` default assum
 ## Tests
 
 `action.yml` is exercised by a harness that stubs `curl` and runs the whole step
-across **20 response shapes**, plus **11 mutants** that each remove one guard. All
-20 correct; all 11 caught.
+across **21 response shapes**, plus **12 mutants** that each remove one guard. All
+21 correct; all 12 caught.
 
 The stub reads the nonce out of the request it is handed and answers with it, so the
 binding is exercised rather than assumed. It tells the primary request from the

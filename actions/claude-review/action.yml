@@ -300,5 +300,17 @@ runs:
         elif [ "$FIRST_LINE" = "VERDICT-$NONCE: REQUEST_CHANGES" ]; then
           echo "verdict=REQUEST_CHANGES" >> "$GITHUB_OUTPUT"
         else
-          inconclusive "The automated review did not begin with a verdict line bound to this run, so no verdict was recorded."
+          # APPEND the reason -- do not call inconclusive(), whose truncating write
+          # would destroy the review text saved above. This is the one failure that
+          # happens AFTER the model produced real findings (a preamble ahead of the
+          # verdict line is enough), and those findings are exactly what the human
+          # who must now review needs. Every copy this action replaced appended
+          # here; consolidation must not drop a defence all nine copies had. The
+          # verdict is still INCONCLUSIVE, and the caller still fails the job on it
+          # -- what is preserved is the text, not the outcome. The nonce strip has
+          # already run on this text, so nothing here re-exposes the marker.
+          echo "::warning::Could not parse a verdict from the first line of the review."
+          echo "verdict=INCONCLUSIVE" >> "$GITHUB_OUTPUT"
+          printf '\n---\n%s\n\nThis is not an approval. A human review is required. The text above is the model'"'"'s unverified output, preserved so its findings are not lost.\n' \
+            "The automated review did not begin with a verdict line bound to this run, so no verdict was recorded." >> "$REVIEW_FILE"
         fi
