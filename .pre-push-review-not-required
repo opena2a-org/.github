@@ -1,1 +1,13 @@
-Org profile README repo. No code surface: nothing to build, test, lint, or new-user walk. All review value lives in the GitHub PR diff itself.
+Org profile README repo, plus one composite action (actions/claude-review) that is
+SHA-pinned by every consumer. There is no build, no lint and no new-user walk.
+
+There IS a test surface, and it is not optional: actions/claude-review/test/ holds a
+response-shape harness and a mutant suite. Run BOTH before pushing any change to
+action.yml, and require every mutant to be caught:
+
+  python3 actions/claude-review/test/harness.py actions/claude-review/action.yml
+  python3 actions/claude-review/test/mutants.py actions/claude-review/action.yml \
+          actions/claude-review/test/harness.py
+
+A green harness proves nothing on its own -- a harness that asserts the wrong things
+passes just as green as one that works. The mutant run is the non-vacuity control.
