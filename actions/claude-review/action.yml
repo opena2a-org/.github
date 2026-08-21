@@ -97,7 +97,9 @@ outputs:
       `primary` or `fallback` — which request produced the verdict. A fallback
       that runs on every PR is indistinguishable from a primary that works, which
       is how an invalid API version went unnoticed across nine repos, so callers
-      should surface this.
+      should surface this. `none` when requests were sent and none produced a
+      review; EMPTY when no request was sent at all (no key, or over the token
+      budget). Callers must not render `none` or empty as a completed review.
     value: ${{ steps.call.outputs.review_path }}
 
 runs:
@@ -276,14 +278,28 @@ runs:
           [ "$HTTP_CODE" = "200" ] && REVIEW_TEXT=$(extract)
         fi
 
-        echo "review_path=$REVIEW_PATH" >> "$GITHUB_OUTPUT"
-        echo "Review produced by the $REVIEW_PATH request."
-
+        # The path is reported only once a request has actually produced a review.
+        # `REVIEW_PATH` is set to `fallback` BEFORE the retry is attempted, so
+        # announcing it here unconditionally meant a run where the primary AND the
+        # retry both failed still logged "Review produced by the fallback request."
+        # and handed callers `review_path=fallback` next to an INCONCLUSIVE verdict
+        # -- every consumer then published a footer crediting a retry that returned
+        # nothing. This line is also the evidence used to verify each adoption of
+        # this action, so of all the lines here it is the one that must not lie.
+        #
+        # `none` is a THIRD state, distinct from the empty output the earlier exits
+        # leave behind: empty means no request was ever sent (no key, over budget),
+        # `none` means requests were sent and none of them answered.
         if [ -z "$REVIEW_TEXT" ]; then
+          echo "review_path=none" >> "$GITHUB_OUTPUT"
+          echo "No model request produced a review; the primary and any retry both failed."
           ERROR=$(jq -r '.error.message // "no error message"' /tmp/response.json 2>/dev/null || echo "unreadable response body")
           echo "::warning::Claude API call produced no review (HTTP $HTTP_CODE): $ERROR"
           inconclusive "The automated review could not be completed (HTTP $HTTP_CODE: $ERROR)."
         fi
+
+        echo "review_path=$REVIEW_PATH" >> "$GITHUB_OUTPUT"
+        echo "Review produced by the $REVIEW_PATH request."
 
         # Strip the marker line out of what gets posted. Echoing the nonce into a
         # comment would let a later run read it back, which is the attack it exists

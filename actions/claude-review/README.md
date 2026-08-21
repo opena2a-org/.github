@@ -101,12 +101,19 @@ on every PR is indistinguishable from a primary that works — which is exactly 
 invalid `anthropic-version` went unnoticed across nine repos while every review
 silently came from the fallback.
 
+It names a request only when one produced a review. If requests were sent and none
+answered, it is `none`; if no request was sent at all — no key, or over the token
+budget — it is empty. **A caller must not render `none` or empty as a completed
+review.** Reporting the last request *attempted* meant a run where the primary and
+the retry both failed still announced a fallback review that never happened.
+
 ## Outputs
 
 - `verdict` — `APPROVE`, `REQUEST_CHANGES` or `INCONCLUSIVE`. Never empty.
 - `review-file` — path to the review body, written for **every** verdict.
 - `input-tokens` — measured input tokens, empty only if the measurement itself failed.
-- `review-path` — `primary` or `fallback`.
+- `review-path` — `primary` or `fallback` when a request produced the review;
+  `none` when requests were sent and none answered; empty when none was sent.
 
 **`INCONCLUSIVE` is a third state, not a pass.** The caller must fail the job on it.
 Every failure path in the action resolves to `INCONCLUSIVE`: no key, missing prompt
