@@ -65,7 +65,7 @@ jobs:
       # ... build /tmp/system_prompt.txt and /tmp/user_msg.txt ...
 
       - id: review
-        uses: opena2a-org/.github/actions/claude-review@43ab2da
+        uses: opena2a-org/.github/actions/claude-review@PIN_A_SHA  # see below
         with:
           anthropic-api-key: SECRET_REFERENCE   # your repo's Anthropic key secret
           system-prompt-file: /tmp/system_prompt.txt
@@ -79,11 +79,34 @@ jobs:
 Replace `SECRET_REFERENCE` with your repo's secret expression — a composite action
 cannot read `secrets` itself, so the caller passes it in.
 
+## Extended thinking and the fallback
+
+`thinking-budget` (default `0`, off) puts the primary request in extended-thinking
+mode. Eight of the nine gates this action replaces used `10000` with
+`max-tokens: 16000`. **`max-tokens` must exceed `thinking-budget`** — the API
+requires it, and this action refuses with that as the reason rather than letting
+you discover it as a 400 at review time.
+
+When thinking is on and the primary request fails or returns no text, the action
+**retries once without thinking** at `fallback-max-tokens` (default `8192`),
+**reusing the same nonce**. A fresh nonce there would mean the model was told a
+different marker than the one being checked, so every fallback review would come
+back inconclusive.
+
+With thinking off there is no retry: it would be byte-identical to the request that
+just failed.
+
+`review-path` reports which request answered. **Surface it.** A fallback that runs
+on every PR is indistinguishable from a primary that works — which is exactly how an
+invalid `anthropic-version` went unnoticed across nine repos while every review
+silently came from the fallback.
+
 ## Outputs
 
 - `verdict` — `APPROVE`, `REQUEST_CHANGES` or `INCONCLUSIVE`. Never empty.
 - `review-file` — path to the review body, written for **every** verdict.
 - `input-tokens` — measured input tokens, empty only if the measurement itself failed.
+- `review-path` — `primary` or `fallback`.
 
 **`INCONCLUSIVE` is a third state, not a pass.** The caller must fail the job on it.
 Every failure path in the action resolves to `INCONCLUSIVE`: no key, missing prompt
@@ -91,23 +114,29 @@ files, `count_tokens` non-200 or unparseable, over budget, API non-200, no text
 blocks, or a reply with no verdict on its first line. Nothing resolves a failure
 into `APPROVE`.
 
-## Pin the SHA, not `@main`
+## Pin a SHA, not `@main`
 
 `@main` moves every consuming repo the instant this file changes — a bad edit here
 would reach every merge gate in the org before anyone reviewed it.
 
-Pin the commit SHA: `@43ab2da`. That is stronger than a tag, not a workaround for
-the absence of one — a tag can be moved to point at different code, a SHA cannot,
-which is why SHA pinning is the standard advice for actions.
+Resolve the current SHA when you adopt or bump:
 
-**Whoever changes this action must update the SHA in this file in the same PR.**
-It went stale once already, within hours: the README kept pointing at the revision
-before the nonce binding landed, so anyone following it would have adopted the
-version missing a security property. A pin that names the wrong revision is worse
-than no pin, because it looks deliberate.
+```bash
+gh api repos/opena2a-org/.github/commits/main --jq '.sha[0:7]'
+```
 
-Bumping a consumer is then a visible one-line change in that repo's own PR, which
-is the point: no repo's gate changes without someone approving it there.
+and pin that. A SHA is stronger than a tag, not a substitute for one: a tag can be
+moved to point at different code, a SHA cannot.
+
+**This file deliberately does not hardcode the SHA.** An earlier version did, and it
+was stale within hours — pointing adopters at the revision before the nonce binding
+landed, i.e. at the version missing a security property. A pin that names the wrong
+revision is worse than no pin, because it looks deliberate. Resolve it at adoption
+time instead.
+
+Bumping a consumer is then a visible one-line change in that repo's own PR, which is
+the point: no repo's gate moves without someone approving it there.
+
 
 ## Changing the model
 
@@ -117,19 +146,22 @@ Read the extraction note in `action.yml` first. The `token-budget` default assum
 ## Tests
 
 `action.yml` is exercised by a harness that stubs `curl` and runs the whole step
-across **15 response shapes**, plus **seven mutants** that each remove one guard.
-All 15 correct; all seven caught. The stub reads the nonce out of the request it
-is handed and answers with it, so the binding is exercised rather than assumed;
-separate cases supply a **forged** nonce and a bare `APPROVE`.
+across **20 response shapes**, plus **11 mutants** that each remove one guard. All
+20 correct; all 11 caught.
+
+The stub reads the nonce out of the request it is handed and answers with it, so the
+binding is exercised rather than assumed. It tells the primary request from the
+fallback by whether the body carries `thinking`, which is what makes the retry path
+testable at all — including the mutant where the fallback mints a **fresh** nonce.
 
 Several guards only became testable once a **discriminating** case existed:
 
-- A non-200 whose body still carries a usable payload. With an ordinary error
-  body, the HTTP guard and the guard after it are indistinguishable — delete the
-  first and nothing changes.
-- The placeholder and metacharacter checks do **not** change the verdict: the
-  exact-match nonce check already forces `INCONCLUSIVE` without them. What they
-  change is whether the operator is told *why*, so they are asserted on their
-  reason text. Claiming them as independent defences would have been false.
+- A non-200 whose body still carries a usable payload. With an ordinary error body,
+  the HTTP guard and the guard after it are indistinguishable — delete the first and
+  nothing changes.
+- The placeholder check, the metacharacter guard and the API-failure guard do **not**
+  change the verdict; later guards already force `INCONCLUSIVE`. What they change is
+  whether the operator is told *why*, so they are asserted on their reason text.
+  Claiming them as independent defences would have been false.
 
 A redundant defence no test can tell from its absence is not a defence.
