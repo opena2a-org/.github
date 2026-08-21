@@ -256,8 +256,16 @@ runs:
         # thinking block, so `.text` would be null and the review would come back
         # empty. `(.content // [])` keeps an error body yielding empty rather than
         # a jq error -- this must fail closed.
+        # CR is stripped HERE, once, rather than at the compare. Every copy this
+        # action replaced normalised `FIRST_LINE` alone, which leaves the nonce
+        # STRIP and the verdict COMPARE reading different text: a CR inside the
+        # nonce would satisfy a normalised compare while `grep -v` failed to
+        # match, accepting the verdict AND leaving the marker in the posted
+        # comment. Normalising the extracted text once removes that asymmetry
+        # instead of inheriting it. `\r` is transport encoding; no prompt can
+        # govern it, so the parser must.
         extract() {
-          jq -r '[(.content // [])[] | select(.type == "text") | .text] | join("\n")' /tmp/response.json 2>/dev/null || echo ""
+          jq -r '[(.content // [])[] | select(.type == "text") | .text] | join("\n")' /tmp/response.json 2>/dev/null | tr -d '\r' || echo ""
         }
 
         REVIEW_PATH=primary
@@ -310,7 +318,16 @@ runs:
         # merely CONTAINS "APPROVE" is not enough: the diff is attacker-authored
         # text and a model can be pushed to echo a verdict-shaped line, so the
         # binding to THIS run is the check.
-        FIRST_LINE=$(printf '%s\n' "$REVIEW_TEXT" | sed -n '1p')
+        # TRAILING whitespace only, and deliberately NOT leading. The prompt
+        # instructs the model to begin its reply with the verdict line and
+        # "nothing whatsoever before it", so forgiving leading whitespace would
+        # waive a term the prompt states and quietly retire the instruction.
+        # Trailing whitespace is not forbidden anywhere and is invisible, so a
+        # required merge gate must not turn one emitted space into a red check.
+        # This normalisation cannot weaken the binding: every string it newly
+        # accepts still has to carry this run's 128-bit nonce, which is minted
+        # after the diff is fixed and stripped before the review is posted.
+        FIRST_LINE=$(printf '%s\n' "$REVIEW_TEXT" | sed -n '1p' | sed 's/[[:space:]]*$//')
         if [ "$FIRST_LINE" = "VERDICT-$NONCE: APPROVE" ]; then
           echo "verdict=APPROVE" >> "$GITHUB_OUTPUT"
         elif [ "$FIRST_LINE" = "VERDICT-$NONCE: REQUEST_CHANGES" ]; then
