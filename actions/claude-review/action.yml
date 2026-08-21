@@ -48,6 +48,16 @@ inputs:
     description: Output token cap for the review itself.
     required: false
     default: "4096"
+  nonce-placeholder:
+    description: >-
+      Token in the system prompt that is replaced with a per-run nonce. The
+      prompt MUST instruct the model to begin its reply with
+      `VERDICT-<placeholder>: APPROVE` or `VERDICT-<placeholder>: REQUEST_CHANGES`,
+      and the reply's first line must then match exactly. A prompt without this
+      token is INCONCLUSIVE rather than silently unverified. Must be
+      `[A-Za-z0-9_]+`.
+    required: false
+    default: "__NONCE__"
   token-budget:
     description: >-
       Maximum measured INPUT tokens. Over this, the request is not sent and the
@@ -80,6 +90,7 @@ runs:
         MODEL: ${{ inputs.model }}
         MAX_TOKENS: ${{ inputs.max-tokens }}
         TOKEN_BUDGET: ${{ inputs.token-budget }}
+        NONCE_PLACEHOLDER: ${{ inputs.nonce-placeholder }}
       run: |
         set -euo pipefail
 
@@ -103,8 +114,32 @@ runs:
           [ -s "$f" ] || inconclusive "The review could not run: \`$f\` is missing or empty, so there was nothing to review."
         done
 
+        # PER-RUN NONCE. The verdict is read back as `VERDICT-<nonce>:`, so the
+        # marker cannot be pre-placed in an attacker-authored diff: the value does
+        # not exist until this step runs. Every repo's gate already did this in its
+        # own copy. It lives here now because a property held in nine copies is one
+        # nine repos can each forget -- and the first pilot of this action would
+        # have silently dropped it.
+        case "$NONCE_PLACEHOLDER" in
+          ''|*[!A-Za-z0-9_]*)
+            inconclusive "The review could not run: nonce-placeholder must match [A-Za-z0-9_]+, and it does not. It is substituted with sed, so a placeholder carrying pattern characters is refused rather than guessed at."
+            ;;
+        esac
+
+        NONCE=$(head -c 16 /dev/urandom | xxd -p)
+
+        if ! grep -qF -- "$NONCE_PLACEHOLDER" "$SYSTEM_PROMPT_FILE"; then
+          inconclusive "The review could not run: the system prompt does not contain the nonce placeholder, so the verdict could not be bound to this run. Add it to the prompt's verdict instruction."
+        fi
+
+        # Substitute into a COPY, so the caller's file is untouched. Both sides are
+        # [A-Za-z0-9_]+ -- the placeholder by the guard above, the nonce because it
+        # is hex -- so neither can carry a sed metacharacter.
+        RENDERED_SYSTEM=/tmp/claude_review_system.txt
+        sed "s/$NONCE_PLACEHOLDER/$NONCE/g" "$SYSTEM_PROMPT_FILE" > "$RENDERED_SYSTEM"
+
         jq -n \
-          --rawfile system "$SYSTEM_PROMPT_FILE" \
+          --rawfile system "$RENDERED_SYSTEM" \
           --rawfile user "$USER_MESSAGE_FILE" \
           --arg model "$MODEL" \
           --argjson max_tokens "$MAX_TOKENS" \
@@ -182,13 +217,20 @@ runs:
           inconclusive "The automated review returned no text content, so there is no verdict to report."
         fi
 
-        printf '%s\n' "$REVIEW_TEXT" > "$REVIEW_FILE"
+        # Strip the marker line out of what gets posted. Echoing the nonce into a
+        # comment would let a later run read it back, which is the attack it exists
+        # to stop.
+        printf '%s\n' "$REVIEW_TEXT" | grep -v -- "VERDICT-$NONCE:" > "$REVIEW_FILE" || true
 
-        # The verdict is read from the reply's own first line. A reply that does
-        # not state one is INCONCLUSIVE rather than assumed good.
-        FIRST_LINE=$(printf '%s' "$REVIEW_TEXT" | head -1)
-        case "$FIRST_LINE" in
-          *REQUEST_CHANGES*) echo "verdict=REQUEST_CHANGES" >> "$GITHUB_OUTPUT" ;;
-          *APPROVE*)         echo "verdict=APPROVE" >> "$GITHUB_OUTPUT" ;;
-          *)                 inconclusive "The automated review did not state a verdict on its first line, so none was recorded." ;;
-        esac
+        # EXACT match on the whole first line, nonce included. A first line that
+        # merely CONTAINS "APPROVE" is not enough: the diff is attacker-authored
+        # text and a model can be pushed to echo a verdict-shaped line, so the
+        # binding to THIS run is the check.
+        FIRST_LINE=$(printf '%s\n' "$REVIEW_TEXT" | sed -n '1p')
+        if [ "$FIRST_LINE" = "VERDICT-$NONCE: APPROVE" ]; then
+          echo "verdict=APPROVE" >> "$GITHUB_OUTPUT"
+        elif [ "$FIRST_LINE" = "VERDICT-$NONCE: REQUEST_CHANGES" ]; then
+          echo "verdict=REQUEST_CHANGES" >> "$GITHUB_OUTPUT"
+        else
+          inconclusive "The automated review did not begin with a verdict line bound to this run, so no verdict was recorded."
+        fi

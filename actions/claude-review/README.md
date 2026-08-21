@@ -28,6 +28,30 @@ focus are legitimately its own. So do diff gathering and review posting, which
 depend on per-repo permissions and formatting. Share what drifted; keep local what
 should vary.
 
+## The verdict is bound to the run — your prompt must cooperate
+
+The action mints a per-run nonce and substitutes it into your system prompt
+wherever `__NONCE__` appears. The reply's **first line must then equal**
+`VERDICT-<nonce>: APPROVE` or `VERDICT-<nonce>: REQUEST_CHANGES` exactly.
+
+That binding is the point: the diff is attacker-authored text, and a model can be
+pushed to echo a verdict-shaped line. A marker that did not exist until this run
+started cannot be pre-placed in a pull request. A first line that merely *contains*
+`APPROVE` is not accepted.
+
+So your system prompt must carry the placeholder in its verdict instruction:
+
+```
+Your reply MUST BEGIN with exactly one of these two lines:
+VERDICT-__NONCE__: APPROVE
+VERDICT-__NONCE__: REQUEST_CHANGES
+```
+
+A prompt without `__NONCE__` is `INCONCLUSIVE` **with that stated as the reason** —
+not silently unverified. The nonce is stripped from the posted body, because
+echoing it into a comment would let a later run read it back, which is the attack
+it exists to prevent.
+
 ## Usage
 
 The caller renders two files, calls this action, then posts and enforces.
@@ -87,8 +111,19 @@ Read the extraction note in `action.yml` first. The `token-budget` default assum
 ## Tests
 
 `action.yml` is exercised by a harness that stubs `curl` and runs the whole step
-across 11 response shapes, plus five mutants that each remove one guard. Two of
-those mutants only fail with a **discriminating** case present — a non-200 whose
-body still carries a usable payload — because with an ordinary error body the
-guard under test and the one after it are indistinguishable. A redundant defence
-no test can tell from its absence is not a defence.
+across **15 response shapes**, plus **seven mutants** that each remove one guard.
+All 15 correct; all seven caught. The stub reads the nonce out of the request it
+is handed and answers with it, so the binding is exercised rather than assumed;
+separate cases supply a **forged** nonce and a bare `APPROVE`.
+
+Several guards only became testable once a **discriminating** case existed:
+
+- A non-200 whose body still carries a usable payload. With an ordinary error
+  body, the HTTP guard and the guard after it are indistinguishable — delete the
+  first and nothing changes.
+- The placeholder and metacharacter checks do **not** change the verdict: the
+  exact-match nonce check already forces `INCONCLUSIVE` without them. What they
+  change is whether the operator is told *why*, so they are asserted on their
+  reason text. Claiming them as independent defences would have been false.
+
+A redundant defence no test can tell from its absence is not a defence.
