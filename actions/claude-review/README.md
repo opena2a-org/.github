@@ -65,7 +65,7 @@ jobs:
       # ... build /tmp/system_prompt.txt and /tmp/user_msg.txt ...
 
       - id: review
-        uses: opena2a-org/.github/actions/claude-review@6940df1
+        uses: opena2a-org/.github/actions/claude-review@43ab2da
         with:
           anthropic-api-key: SECRET_REFERENCE   # your repo's Anthropic key secret
           system-prompt-file: /tmp/system_prompt.txt
@@ -96,9 +96,15 @@ into `APPROVE`.
 `@main` moves every consuming repo the instant this file changes — a bad edit here
 would reach every merge gate in the org before anyone reviewed it.
 
-Pin the commit SHA: `@6940df1`. That is stronger than a tag, not a workaround for
+Pin the commit SHA: `@43ab2da`. That is stronger than a tag, not a workaround for
 the absence of one — a tag can be moved to point at different code, a SHA cannot,
 which is why SHA pinning is the standard advice for actions.
+
+**Whoever changes this action must update the SHA in this file in the same PR.**
+It went stale once already, within hours: the README kept pointing at the revision
+before the nonce binding landed, so anyone following it would have adopted the
+version missing a security property. A pin that names the wrong revision is worse
+than no pin, because it looks deliberate.
 
 Bumping a consumer is then a visible one-line change in that repo's own PR, which
 is the point: no repo's gate changes without someone approving it there.
