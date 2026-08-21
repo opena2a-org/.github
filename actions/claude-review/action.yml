@@ -1,0 +1,194 @@
+name: Claude review call
+description: >-
+  Measure a review request against the model's context window, send it, and
+  return a verdict. The shared half of every repo's PR review gate.
+
+# WHY THIS IS AN ACTION AND NOT A REUSABLE WORKFLOW.
+#
+# `Claude Code Review` is a REQUIRED status context on main in six repos. A
+# reusable workflow called at the job level renames its check to
+# `<caller-job> / <called-job>`, so the required context would never appear
+# again and every pull request in all six would block until branch protection
+# was edited in each one -- a coordinated six-repo change where any slip is an
+# outage. A composite action is a STEP inside the caller's existing job, so the
+# job name, and therefore the check name, is untouched. Same goal, none of that.
+#
+# WHAT THIS OWNS, AND WHAT IT DELIBERATELY DOES NOT.
+#
+# Three defects have been found in this gate, and all three lived in the model
+# call: an `anthropic-version` the API rejected outright (so every review ever
+# produced came from the fallback), an extraction reading `.content[0].text`
+# (which truncated multi-block replies and would have blocked every PR the day a
+# model pin emitted thinking blocks), and a byte cap standing in for a token
+# budget (refusing at about a fifth of the window). Copy-paste is how one defect
+# became nine. So the model call is shared here.
+#
+# The system prompt is NOT shared: each repo's tech stack and review focus are
+# legitimately its own. Nor is diff gathering or review posting, which depend on
+# per-repo permissions and formatting. Share what drifted; keep local what
+# should vary.
+
+inputs:
+  anthropic-api-key:
+    description: >-
+      API key. A composite action cannot read `secrets`, so the caller passes it
+      explicitly from its own secret.
+    required: true
+  system-prompt-file:
+    description: Path to the rendered system prompt.
+    required: true
+  user-message-file:
+    description: Path to the rendered user message (PR title, body, file list, diff).
+    required: true
+  model:
+    description: Model id. Changing this REQUIRES re-reading the extraction note below.
+    required: false
+    default: claude-sonnet-4-5-20250929
+  max-tokens:
+    description: Output token cap for the review itself.
+    required: false
+    default: "4096"
+  token-budget:
+    description: >-
+      Maximum measured INPUT tokens. Over this, the request is not sent and the
+      verdict is INCONCLUSIVE. Default 180000 against a 200000 window: it leaves
+      room for the output and roughly 16K of slack, and is still about four
+      times the largest diff ever measured against this gate (47,133 tokens).
+    required: false
+    default: "180000"
+
+outputs:
+  verdict:
+    description: APPROVE, REQUEST_CHANGES or INCONCLUSIVE. Never empty.
+    value: ${{ steps.call.outputs.verdict }}
+  review-file:
+    description: Path to the review body, written for every verdict including INCONCLUSIVE.
+    value: ${{ steps.call.outputs.review_file }}
+  input-tokens:
+    description: Measured input tokens, or empty when the measurement itself failed.
+    value: ${{ steps.call.outputs.input_tokens }}
+
+runs:
+  using: composite
+  steps:
+    - id: call
+      shell: bash
+      env:
+        REVIEW_API_KEY: ${{ inputs.anthropic-api-key }}
+        SYSTEM_PROMPT_FILE: ${{ inputs.system-prompt-file }}
+        USER_MESSAGE_FILE: ${{ inputs.user-message-file }}
+        MODEL: ${{ inputs.model }}
+        MAX_TOKENS: ${{ inputs.max-tokens }}
+        TOKEN_BUDGET: ${{ inputs.token-budget }}
+      run: |
+        set -euo pipefail
+
+        REVIEW_FILE=/tmp/claude_review_body.txt
+        echo "review_file=$REVIEW_FILE" >> "$GITHUB_OUTPUT"
+
+        # Every exit below records exactly one verdict, and INCONCLUSIVE is a
+        # third state rather than a pass -- the caller is expected to fail the
+        # job on it. Nothing here resolves a failure into APPROVE.
+        inconclusive() {
+          echo "verdict=INCONCLUSIVE" >> "$GITHUB_OUTPUT"
+          printf '%s\n\nThis is not an approval. A human review is required.\n' "$1" > "$REVIEW_FILE"
+          exit 0
+        }
+
+        if [ -z "${REVIEW_API_KEY:-}" ]; then
+          echo "::warning::No API key was provided to the review action."
+          inconclusive "The review could not run: no API key was available to this run."
+        fi
+        for f in "$SYSTEM_PROMPT_FILE" "$USER_MESSAGE_FILE"; do
+          [ -s "$f" ] || inconclusive "The review could not run: \`$f\` is missing or empty, so there was nothing to review."
+        done
+
+        jq -n \
+          --rawfile system "$SYSTEM_PROMPT_FILE" \
+          --rawfile user "$USER_MESSAGE_FILE" \
+          --arg model "$MODEL" \
+          --argjson max_tokens "$MAX_TOKENS" \
+          '{ model: $model, max_tokens: $max_tokens, system: $system,
+             messages: [{ role: "user", content: $user }] }' > /tmp/request.json
+
+        # MEASURE THE REQUEST THAT WILL ACTUALLY BE SENT, then decide. This
+        # replaced a 120,000-BYTE cap. Bytes are the wrong instrument for a
+        # token budget, and not by a little: measured on real diffs, 2.8-3.2
+        # bytes per token, so that cap refused at roughly 38-43K tokens -- about
+        # a fifth of the window. It withheld a verdict on exactly the large,
+        # security-relevant changes an automated opinion is worth most on.
+        #
+        # count_tokens REJECTS max_tokens ("Extra inputs are not permitted",
+        # HTTP 400), so it is deleted from the copy sent for measurement. That
+        # is load-bearing: sent as-is it 400s on every run, and a 400 read as
+        # "probably fits" would leave a gate in place that decided nothing.
+        jq 'del(.max_tokens)' /tmp/request.json > /tmp/count_request.json
+
+        CT_CODE=$(curl -s -o /tmp/count_response.json -w '%{http_code}' \
+          -X POST "https://api.anthropic.com/v1/messages/count_tokens" \
+          -H "Content-Type: application/json" \
+          -H "x-api-key: ${REVIEW_API_KEY}" \
+          -H "anthropic-version: 2023-06-01" \
+          -d @/tmp/count_request.json)
+
+        # A gate that cannot measure the request must not guess that it fits --
+        # that is how a size gate becomes decorative without anyone noticing.
+        if [ "$CT_CODE" != "200" ]; then
+          CT_ERR=$(jq -r '.error.message // "no error message"' /tmp/count_response.json 2>/dev/null || echo "unreadable response body")
+          echo "::warning::count_tokens failed (HTTP $CT_CODE): $CT_ERR"
+          inconclusive "The review could not measure this pull request's size (count_tokens HTTP $CT_CODE: $CT_ERR), so it did not send it."
+        fi
+
+        INPUT_TOKENS=$(jq -r '.input_tokens // empty' /tmp/count_response.json 2>/dev/null || echo "")
+        # `case`, not a numeric test: an empty or non-numeric value makes
+        # `[ "$x" -gt N ]` error under `set -e`, and an error must not be the
+        # thing that decides whether an unmeasured request gets sent.
+        case "$INPUT_TOKENS" in
+          ''|*[!0-9]*)
+            echo "::warning::count_tokens returned no usable input_tokens"
+            inconclusive "The review could not read a token count for this pull request, so it did not send it."
+            ;;
+        esac
+
+        echo "Measured request size: ${INPUT_TOKENS} input tokens (budget ${TOKEN_BUDGET})"
+        echo "input_tokens=$INPUT_TOKENS" >> "$GITHUB_OUTPUT"
+
+        if [ "$INPUT_TOKENS" -gt "$TOKEN_BUDGET" ]; then
+          inconclusive "This pull request is ${INPUT_TOKENS} input tokens, over the ${TOKEN_BUDGET} token review budget. It genuinely does not fit in the model's context window, so an automated verdict would describe only part of the change."
+        fi
+
+        HTTP_CODE=$(curl -s -o /tmp/response.json -w '%{http_code}' \
+          -X POST "https://api.anthropic.com/v1/messages" \
+          -H "Content-Type: application/json" \
+          -H "x-api-key: ${REVIEW_API_KEY}" \
+          -H "anthropic-version: 2023-06-01" \
+          -d @/tmp/request.json)
+
+        if [ "$HTTP_CODE" != "200" ]; then
+          ERROR=$(jq -r '.error.message // "no error message"' /tmp/response.json 2>/dev/null || echo "unreadable response body")
+          echo "::warning::Claude API call failed (HTTP $HTTP_CODE): $ERROR"
+          inconclusive "The automated review could not be completed (HTTP $HTTP_CODE: $ERROR)."
+        fi
+
+        # EVERY text block, not content[0]. Two reasons, one already live: a
+        # multi-block reply silently lost everything after the first, so a long
+        # review was truncated with no signal; and if `model` is ever pointed at
+        # one that emits extended thinking, content[0] is a thinking block,
+        # .text is null, and the review comes back empty. `(.content // [])`
+        # keeps an error body yielding empty rather than a jq error, so the
+        # branch below still fires -- this must fail closed.
+        REVIEW_TEXT=$(jq -r '[(.content // [])[] | select(.type == "text") | .text] | join("\n")' /tmp/response.json 2>/dev/null || echo "")
+        if [ -z "$REVIEW_TEXT" ]; then
+          inconclusive "The automated review returned no text content, so there is no verdict to report."
+        fi
+
+        printf '%s\n' "$REVIEW_TEXT" > "$REVIEW_FILE"
+
+        # The verdict is read from the reply's own first line. A reply that does
+        # not state one is INCONCLUSIVE rather than assumed good.
+        FIRST_LINE=$(printf '%s' "$REVIEW_TEXT" | head -1)
+        case "$FIRST_LINE" in
+          *REQUEST_CHANGES*) echo "verdict=REQUEST_CHANGES" >> "$GITHUB_OUTPUT" ;;
+          *APPROVE*)         echo "verdict=APPROVE" >> "$GITHUB_OUTPUT" ;;
+          *)                 inconclusive "The automated review did not state a verdict on its first line, so none was recorded." ;;
+        esac
