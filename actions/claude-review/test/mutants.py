@@ -92,6 +92,32 @@ MUTANTS = [
     ),
 ]
 
+# The redaction's properties, each pinned by the sweep rows and their
+# over-strip controls. See test/README.md for the stopping rule that bounds
+# what this denylist is for.
+MUTANTS += [
+    ("redaction narrowed to hackmyagent's literal",
+     '^[[:punct:][:space:][:digit:]]*VERDICT(-[0-9A-Za-z]+)?[[:punct:][:space:]]*:', '^[[:space:]]*VERDICT:'),
+    ("nonce-SHAPE branch removed from the anchored family",
+     "VERDICT(-[0-9A-Za-z]+)?[[:punct:][:space:]]*:", "VERDICT[[:punct:][:space:]]*:"),
+    ("redaction case-sensitivity restored",
+     "grep -qEi -e", "grep -qE -e"),
+    ("digit leader dropped (ordered-list bypass)",
+     "[[:punct:][:space:][:digit:]]*VERDICT", "[[:punct:][:space:]]*VERDICT"),
+    ("disclosure footer removed",
+     'if [ "$REDACTED" -gt 0 ]; then', 'if false; then'),
+    ("locale pin removed from the redaction",
+     "LC_ALL=C.UTF-8 grep -qEi", "grep -qEi"),
+    ("redaction reverts from placeholder to deletion",
+     """printf '%s\\n' "$PLACEHOLDER" >> "$REVIEW_FILE\"""", ":"),
+    ("forged-family statement removed from the redaction",
+     '-e "$FMT" -e "$FORGED"', '-e "$FMT"'),
+    ("forged token class narrowed to alphanumerics",
+     "[0-9A-Za-z_-]{8,}", "[0-9A-Za-z]{8,}"),
+    ("locale degradation probe removed",
+     "LOCALE_DEGRADED=1", "LOCALE_DEGRADED=0"),
+]
+
 print(f"{'mutant':<52} {'caught?'}")
 all_caught = True
 for name, old, new in MUTANTS:

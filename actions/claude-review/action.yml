@@ -5,13 +5,23 @@ description: >-
 
 # WHY THIS IS AN ACTION AND NOT A REUSABLE WORKFLOW.
 #
-# `Claude Code Review` is a REQUIRED status context on main in six repos. A
-# reusable workflow called at the job level renames its check to
+# `Claude Code Review` is a REQUIRED status context on main in several repos.
+# Re-derive the current set instead of trusting any recorded count:
+#
+#   for r in ai-trust agent-runtime-protection oasb nanomind hackmyagent \
+#            secretless-ai agent-identity-management damn-vulnerable-ai-agent \
+#            opena2a-registry; do
+#     printf '%-28s %s\n' "$r" "$(gh api repos/opena2a-org/$r/branches/main/protection \
+#       --jq '.required_status_checks.contexts | map(select(. == "Claude Code Review")) | length')"
+#   done
+#
+# A reusable workflow called at the job level renames its check to
 # `<caller-job> / <called-job>`, so the required context would never appear
-# again and every pull request in all six would block until branch protection
-# was edited in each one -- a coordinated six-repo change where any slip is an
-# outage. A composite action is a STEP inside the caller's existing job, so the
-# job name, and therefore the check name, is untouched. Same goal, none of that.
+# again and every pull request in every one of those repos would block until
+# branch protection was edited in each -- a coordinated multi-repo change where
+# any slip is an outage. A composite action is a STEP inside the caller's
+# existing job, so the job name, and therefore the check name, is untouched.
+# Same goal, none of that.
 #
 # WHAT THIS OWNS, AND WHAT IT DELIBERATELY DOES NOT.
 #
@@ -311,8 +321,57 @@ runs:
 
         # Strip the marker line out of what gets posted. Echoing the nonce into a
         # comment would let a later run read it back, which is the attack it exists
-        # to stop.
-        printf '%s\n' "$REVIEW_TEXT" | grep -v -- "VERDICT-$NONCE:" > "$REVIEW_FILE" || true
+        # to stop. The exact-nonce strip is its own statement and stays first: it is
+        # the anti-replay control, and the shape rules below must never absorb it.
+        # It is a silent deletion because that line is our marker, never reviewer
+        # content.
+        RAW_FILE=/tmp/claude_review_raw.txt
+        printf '%s\n' "$REVIEW_TEXT" | grep -v -- "VERDICT-$NONCE:" > "$RAW_FILE" || true
+
+        # Then redact the gate's own output FORMAT from what gets posted. Two
+        # families: the bare verdict form under a markdown leader (markdown's own
+        # leader syntax is letterless, so the anchor terminates at the first
+        # letter), and the internal marker form with a nonce-shaped token, matched
+        # anywhere in the line because no legitimate sentence contains one.
+        # Matched lines are REPLACED with a placeholder, not deleted: a reviewer
+        # sentence that happens to share the shape is withheld visibly at its own
+        # position, never silently disappeared. Unicode confusables (fullwidth
+        # colon, homoglyphs, format characters inside the token) and HTML-tag
+        # leaders are recorded residuals, not targets: closing them is an
+        # unbounded chase, and no such line can decide anything, because the
+        # verdict is nonce-bound and parsed from the first line only. See
+        # test/README.md for the stopping rule and the executable row classes.
+        # The pinned locale is load-bearing for non-ASCII leaders, so its health
+        # is probed at runtime through the same matcher the redaction uses, and a
+        # degraded run says so in the posted body instead of degrading silently.
+        FMT='^[[:punct:][:space:][:digit:]]*VERDICT(-[0-9A-Za-z]+)?[[:punct:][:space:]]*:'
+        FORGED='VERDICT-[0-9A-Za-z_-]{8,}[[:punct:][:space:]]*:'
+        PLACEHOLDER='[redacted: this line matched the gate'"'"'s verdict-line format — see the diff for the original text]'
+        redaction_match() { LC_ALL=C.UTF-8 grep -qEi -e "$FMT" -e "$FORGED"; }
+
+        LOCALE_DEGRADED=0
+        if ! printf '\342\200\224 VERDICT: APPROVE\n' | redaction_match 2>/dev/null; then
+          echo "::warning::C.UTF-8 is unavailable to grep on this runner; the redaction ran ASCII-only."
+          LOCALE_DEGRADED=1
+        fi
+
+        REDACTED=0
+        : > "$REVIEW_FILE"
+        while IFS= read -r REVIEW_LINE; do
+          if printf '%s\n' "$REVIEW_LINE" | redaction_match; then
+            printf '%s\n' "$PLACEHOLDER" >> "$REVIEW_FILE"
+            REDACTED=$((REDACTED+1))
+          else
+            printf '%s\n' "$REVIEW_LINE" >> "$REVIEW_FILE"
+          fi
+        done < "$RAW_FILE"
+        rm -f "$RAW_FILE"
+        if [ "$REDACTED" -gt 0 ]; then
+          printf '\n*%s line(s) matching this gate'"'"'s own verdict format were replaced with a placeholder above. The verdict is the one this check reports.*\n' "$REDACTED" >> "$REVIEW_FILE"
+        fi
+        if [ "$LOCALE_DEGRADED" = "1" ]; then
+          printf '\n*redaction ran ASCII-only — this runner lacks C.UTF-8; non-ASCII leader forms were not stripped.*\n' >> "$REVIEW_FILE"
+        fi
 
         # EXACT match on the whole first line, nonce included. A first line that
         # merely CONTAINS "APPROVE" is not enough: the diff is attacker-authored
