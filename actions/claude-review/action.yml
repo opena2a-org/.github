@@ -37,6 +37,22 @@ description: >-
 # legitimately its own. Nor is diff gathering or review posting, which depend on
 # per-repo permissions and formatting. Share what drifted; keep local what
 # should vary.
+#
+# BATCH MODE, AND WHY THE PARTITIONER IS NOT HERE.
+#
+# A pull request can be genuinely larger than the context window -- not "larger
+# than a badly chosen cap", genuinely larger. One measured case: 259,622 input
+# tokens against a 200,000-token window. For those, and only those, `batch-dir`
+# switches this action from one request to one request per batch file, with the
+# verdicts aggregated fail-closed. It is OFF unless a caller sets it, and with
+# it unset every byte of behaviour below is what it was before batch mode
+# existed.
+#
+# WHAT DECIDES how a diff is cut into batches stays in the caller, because the
+# answer is repo-shaped: file boundaries, which hunks travel with which
+# full-file context, what the per-batch size target is. What is shared is the
+# part that must never vary -- the per-batch nonce, the per-batch measurement,
+# and an aggregation that cannot turn an incomplete review into a pass.
 
 inputs:
   anthropic-api-key:
@@ -48,7 +64,10 @@ inputs:
     description: Path to the rendered system prompt.
     required: true
   user-message-file:
-    description: Path to the rendered user message (PR title, body, file list, diff).
+    description: >-
+      Path to the rendered user message (PR title, body, file list, diff).
+      Required in single mode, which is the default. In batch mode the batch
+      files ARE the user messages and this input is not read.
     required: true
   model:
     description: Model id. Changing this REQUIRES re-reading the extraction note below.
@@ -89,18 +108,50 @@ inputs:
       verdict is INCONCLUSIVE. Default 180000 against a 200000 window: it leaves
       room for the output and roughly 16K of slack, and is still about four
       times the largest diff ever measured against this gate (47,133 tokens).
+      In batch mode this is the budget for EACH batch; it is not divided among
+      them and it is not raised.
     required: false
     default: "180000"
+  batch-dir:
+    description: >-
+      OFF BY DEFAULT, and off is the org default. When empty (the default), this
+      action sends exactly one request and nothing below changes. When set to a
+      directory, every regular file in it is reviewed as its own request, in
+      sorted order, and the verdicts are aggregated: any REQUEST_CHANGES makes
+      the aggregate REQUEST_CHANGES, all APPROVE makes it APPROVE, and anything
+      else -- a batch that errors, cannot be measured, is over budget, returns
+      no verdict bound to its own nonce, or never ran -- makes it INCONCLUSIVE
+      and stops the loop. The aggregate starts INCONCLUSIVE and is upgraded only
+      by a completed all-batch pass, so an incomplete review can never read as
+      one that finished. Activate it only where a chief has measured a class of
+      pull requests that genuinely does not fit in the window.
+    required: false
+    default: ""
+  max-batches:
+    description: >-
+      Hard ceiling on batches. Above it the run is INCONCLUSIVE before the first
+      request is sent, and says to split the pull request. This bounds cost by
+      construction: the worst case is `max-batches` review calls plus one
+      `count_tokens` each. Only read in batch mode.
+    required: false
+    default: "8"
 
 outputs:
   verdict:
     description: APPROVE, REQUEST_CHANGES or INCONCLUSIVE. Never empty.
     value: ${{ steps.call.outputs.verdict }}
   review-file:
-    description: Path to the review body, written for every verdict including INCONCLUSIVE.
+    description: >-
+      Path to the review body, written for every verdict including INCONCLUSIVE.
+      In batch mode it holds every batch that completed, under `Batch k/N`
+      headings, even when a later batch failed and the aggregate is INCONCLUSIVE
+      -- the findings a completed batch produced are exactly what the human who
+      must now review needs.
     value: ${{ steps.call.outputs.review_file }}
   input-tokens:
-    description: Measured input tokens, or empty when the measurement itself failed.
+    description: >-
+      Measured input tokens, or empty when the measurement itself failed. In
+      batch mode, the sum over the batches that were measured.
     value: ${{ steps.call.outputs.input_tokens }}
   review-path:
     description: >-
@@ -110,6 +161,8 @@ outputs:
       should surface this. `none` when requests were sent and none produced a
       review; EMPTY when no request was sent at all (no key, or over the token
       budget). Callers must not render `none` or empty as a completed review.
+      In batch mode it is `primary` only if EVERY batch that produced a review
+      did so on its primary request.
     value: ${{ steps.call.outputs.review_path }}
 
 runs:
@@ -127,10 +180,14 @@ runs:
         NONCE_PLACEHOLDER: ${{ inputs.nonce-placeholder }}
         THINKING_BUDGET: ${{ inputs.thinking-budget }}
         FALLBACK_MAX_TOKENS: ${{ inputs.fallback-max-tokens }}
+        BATCH_DIR: ${{ inputs.batch-dir }}
+        MAX_BATCHES: ${{ inputs.max-batches }}
       run: |
         set -euo pipefail
 
         REVIEW_FILE=/tmp/claude_review_body.txt
+        RAW_FILE=/tmp/claude_review_raw.txt
+        RENDERED_SYSTEM=/tmp/claude_review_system.txt
         echo "review_file=$REVIEW_FILE" >> "$GITHUB_OUTPUT"
 
         # Every exit below records exactly one verdict, and INCONCLUSIVE is a
@@ -142,13 +199,24 @@ runs:
           exit 0
         }
 
+        # BATCH MODE IS A MODE, NOT A CODE PATH. Everything either mode needs --
+        # validation, the model call, the redaction -- is written once below and
+        # used by both, because nine divergent copies of this logic is the defect
+        # this action was created to end, and a second copy inside the same file
+        # would be the same mistake at smaller scale.
+        BATCH_MODE=0
+        if [ -n "${BATCH_DIR:-}" ]; then
+          BATCH_MODE=1
+        fi
+
         if [ -z "${REVIEW_API_KEY:-}" ]; then
           echo "::warning::No API key was provided to the review action."
           inconclusive "The review could not run: no API key was available to this run."
         fi
-        for f in "$SYSTEM_PROMPT_FILE" "$USER_MESSAGE_FILE"; do
-          [ -s "$f" ] || inconclusive "The review could not run: \`$f\` is missing or empty, so there was nothing to review."
-        done
+        [ -s "$SYSTEM_PROMPT_FILE" ] || inconclusive "The review could not run: \`$SYSTEM_PROMPT_FILE\` is missing or empty, so there was nothing to review."
+        if [ "$BATCH_MODE" = "0" ]; then
+          [ -s "$USER_MESSAGE_FILE" ] || inconclusive "The review could not run: \`$USER_MESSAGE_FILE\` is missing or empty, so there was nothing to review."
+        fi
 
         # PER-RUN NONCE. The verdict is read back as `VERDICT-<nonce>:`, so the
         # marker cannot be pre-placed in an attacker-authored diff: the value does
@@ -162,17 +230,9 @@ runs:
             ;;
         esac
 
-        NONCE=$(head -c 16 /dev/urandom | xxd -p)
-
         if ! grep -qF -- "$NONCE_PLACEHOLDER" "$SYSTEM_PROMPT_FILE"; then
           inconclusive "The review could not run: the system prompt does not contain the nonce placeholder, so the verdict could not be bound to this run. Add it to the prompt's verdict instruction."
         fi
-
-        # Substitute into a COPY, so the caller's file is untouched. Both sides are
-        # [A-Za-z0-9_]+ -- the placeholder by the guard above, the nonce because it
-        # is hex -- so neither can carry a sed metacharacter.
-        RENDERED_SYSTEM=/tmp/claude_review_system.txt
-        sed "s/$NONCE_PLACEHOLDER/$NONCE/g" "$SYSTEM_PROMPT_FILE" > "$RENDERED_SYSTEM"
 
         case "$THINKING_BUDGET" in
           ''|*[!0-9]*) inconclusive "The review could not run: thinking-budget must be a number." ;;
@@ -185,72 +245,34 @@ runs:
           inconclusive "The review could not run: max-tokens ($MAX_TOKENS) must be greater than thinking-budget ($THINKING_BUDGET)."
         fi
 
+        # A FRESH NONCE PER REQUEST, and in batch mode that means per batch. Two
+        # batches sharing one nonce would let batch 2's reply satisfy batch 1's
+        # check, which is the cross-batch replay this binding exists to refuse.
+        # Substitute into a COPY, so the caller's file is untouched. Both sides are
+        # [A-Za-z0-9_]+ -- the placeholder by the guard above, the nonce because it
+        # is hex -- so neither can carry a sed metacharacter.
+        NONCE=""
+        mint_nonce() {
+          NONCE=$(head -c 16 /dev/urandom | xxd -p)
+          sed "s/$NONCE_PLACEHOLDER/$NONCE/g" "$SYSTEM_PROMPT_FILE" > "$RENDERED_SYSTEM"
+        }
+
         build_request() {
-          # $1 = thinking budget for THIS request (0 = off), $2 = max_tokens
+          # $1 = thinking budget for THIS request (0 = off), $2 = max_tokens,
+          # $3 = the user-message file this request is about
           if [ "$1" -gt 0 ]; then
-            jq -n --rawfile system "$RENDERED_SYSTEM" --rawfile user "$USER_MESSAGE_FILE" \
+            jq -n --rawfile system "$RENDERED_SYSTEM" --rawfile user "$3" \
               --arg model "$MODEL" --argjson max_tokens "$2" --argjson budget "$1" \
               '{ model: $model, max_tokens: $max_tokens,
                  thinking: { type: "enabled", budget_tokens: $budget },
                  system: $system, messages: [{ role: "user", content: $user }] }'
           else
-            jq -n --rawfile system "$RENDERED_SYSTEM" --rawfile user "$USER_MESSAGE_FILE" \
+            jq -n --rawfile system "$RENDERED_SYSTEM" --rawfile user "$3" \
               --arg model "$MODEL" --argjson max_tokens "$2" \
               '{ model: $model, max_tokens: $max_tokens, system: $system,
                  messages: [{ role: "user", content: $user }] }'
           fi
         }
-
-        build_request "$THINKING_BUDGET" "$MAX_TOKENS" > /tmp/request.json
-
-        # MEASURE THE REQUEST THAT WILL ACTUALLY BE SENT, then decide. This
-        # replaced a 120,000-BYTE cap. Bytes are the wrong instrument for a
-        # token budget, and not by a little: measured on real diffs, 2.8-3.2
-        # bytes per token, so that cap refused at roughly 38-43K tokens -- about
-        # a fifth of the window. It withheld a verdict on exactly the large,
-        # security-relevant changes an automated opinion is worth most on.
-        #
-        # count_tokens REJECTS max_tokens ("Extra inputs are not permitted",
-        # HTTP 400), so it is deleted from the copy sent for measurement. That
-        # is load-bearing: sent as-is it 400s on every run, and a 400 read as
-        # "probably fits" would leave a gate in place that decided nothing.
-        # Only max_tokens is rejected. `thinking` is ACCEPTED and changes the count
-        # (measured: 14 -> 44 input tokens on a trivial request), so it stays --
-        # stripping it would measure a request that is not the one being sent.
-        jq 'del(.max_tokens)' /tmp/request.json > /tmp/count_request.json
-
-        CT_CODE=$(curl -s -o /tmp/count_response.json -w '%{http_code}' \
-          -X POST "https://api.anthropic.com/v1/messages/count_tokens" \
-          -H "Content-Type: application/json" \
-          -H "x-api-key: ${REVIEW_API_KEY}" \
-          -H "anthropic-version: 2023-06-01" \
-          -d @/tmp/count_request.json)
-
-        # A gate that cannot measure the request must not guess that it fits --
-        # that is how a size gate becomes decorative without anyone noticing.
-        if [ "$CT_CODE" != "200" ]; then
-          CT_ERR=$(jq -r '.error.message // "no error message"' /tmp/count_response.json 2>/dev/null || echo "unreadable response body")
-          echo "::warning::count_tokens failed (HTTP $CT_CODE): $CT_ERR"
-          inconclusive "The review could not measure this pull request's size (count_tokens HTTP $CT_CODE: $CT_ERR), so it did not send it."
-        fi
-
-        INPUT_TOKENS=$(jq -r '.input_tokens // empty' /tmp/count_response.json 2>/dev/null || echo "")
-        # `case`, not a numeric test: an empty or non-numeric value makes
-        # `[ "$x" -gt N ]` error under `set -e`, and an error must not be the
-        # thing that decides whether an unmeasured request gets sent.
-        case "$INPUT_TOKENS" in
-          ''|*[!0-9]*)
-            echo "::warning::count_tokens returned no usable input_tokens"
-            inconclusive "The review could not read a token count for this pull request, so it did not send it."
-            ;;
-        esac
-
-        echo "Measured request size: ${INPUT_TOKENS} input tokens (budget ${TOKEN_BUDGET})"
-        echo "input_tokens=$INPUT_TOKENS" >> "$GITHUB_OUTPUT"
-
-        if [ "$INPUT_TOKENS" -gt "$TOKEN_BUDGET" ]; then
-          inconclusive "This pull request is ${INPUT_TOKENS} input tokens, over the ${TOKEN_BUDGET} token review budget. It genuinely does not fit in the model's context window, so an automated verdict would describe only part of the change."
-        fi
 
         send() {
           curl -s -o /tmp/response.json -w '%{http_code}' \
@@ -278,57 +300,125 @@ runs:
           jq -r '[(.content // [])[] | select(.type == "text") | .text] | join("\n")' /tmp/response.json 2>/dev/null | tr -d '\r' || echo ""
         }
 
-        REVIEW_PATH=primary
-        HTTP_CODE=$(send /tmp/request.json)
-        REVIEW_TEXT=""
-        [ "$HTTP_CODE" = "200" ] && REVIEW_TEXT=$(extract)
+        # ONE REVIEW REQUEST, start to finish: measure, decide, send, retry,
+        # extract. Results come back in RO_* globals rather than on stdout,
+        # because wrapping this in a command substitution would swallow the
+        # warnings and hide a `set -e` failure inside a subshell.
+        #   RO_STATUS  ok | unmeasured | over-budget | no-review
+        #   RO_REASON  the operator-facing sentence for a non-ok status
+        #   RO_TEXT    the model's reply, CR-normalised; empty unless ok
+        #   RO_TOKENS  measured input tokens; empty when the measurement failed
+        #   RO_PATH    primary | fallback | none; EMPTY when no request was sent
+        review_once() {
+          RO_STATUS=""; RO_REASON=""; RO_TEXT=""; RO_TOKENS=""; RO_PATH=""
 
-        # FALLBACK: retry without thinking. Only when thinking was actually on --
-        # otherwise the retry is byte-identical to the request that just failed and
-        # is pure cost. The SAME nonce is reused: a fresh one would mean the model
-        # was told a different marker than the one being checked, so every fallback
-        # review would go INCONCLUSIVE.
-        if [ -z "$REVIEW_TEXT" ] && [ "$THINKING_BUDGET" -gt 0 ]; then
-          echo "::warning::Primary review request failed (HTTP $HTTP_CODE); retrying without extended thinking."
-          REVIEW_PATH=fallback
-          build_request 0 "$FALLBACK_MAX_TOKENS" > /tmp/request_fallback.json
-          HTTP_CODE=$(send /tmp/request_fallback.json)
+          build_request "$THINKING_BUDGET" "$MAX_TOKENS" "$1" > /tmp/request.json
+
+          # MEASURE THE REQUEST THAT WILL ACTUALLY BE SENT, then decide. This
+          # replaced a 120,000-BYTE cap. Bytes are the wrong instrument for a
+          # token budget, and not by a little: measured on real diffs, 2.8-3.2
+          # bytes per token, so that cap refused at roughly 38-43K tokens -- about
+          # a fifth of the window. It withheld a verdict on exactly the large,
+          # security-relevant changes an automated opinion is worth most on.
+          #
+          # count_tokens REJECTS max_tokens ("Extra inputs are not permitted",
+          # HTTP 400), so it is deleted from the copy sent for measurement. That
+          # is load-bearing: sent as-is it 400s on every run, and a 400 read as
+          # "probably fits" would leave a gate in place that decided nothing.
+          # Only max_tokens is rejected. `thinking` is ACCEPTED and changes the count
+          # (measured: 14 -> 44 input tokens on a trivial request), so it stays --
+          # stripping it would measure a request that is not the one being sent.
+          jq 'del(.max_tokens)' /tmp/request.json > /tmp/count_request.json
+
+          CT_CODE=$(curl -s -o /tmp/count_response.json -w '%{http_code}' \
+            -X POST "https://api.anthropic.com/v1/messages/count_tokens" \
+            -H "Content-Type: application/json" \
+            -H "x-api-key: ${REVIEW_API_KEY}" \
+            -H "anthropic-version: 2023-06-01" \
+            -d @/tmp/count_request.json)
+
+          # A gate that cannot measure the request must not guess that it fits --
+          # that is how a size gate becomes decorative without anyone noticing.
+          if [ "$CT_CODE" != "200" ]; then
+            CT_ERR=$(jq -r '.error.message // "no error message"' /tmp/count_response.json 2>/dev/null || echo "unreadable response body")
+            echo "::warning::count_tokens failed (HTTP $CT_CODE): $CT_ERR"
+            RO_STATUS=unmeasured
+            RO_REASON="The review could not measure this pull request's size (count_tokens HTTP $CT_CODE: $CT_ERR), so it did not send it."
+            return 0
+          fi
+
+          INPUT_TOKENS=$(jq -r '.input_tokens // empty' /tmp/count_response.json 2>/dev/null || echo "")
+          # `case`, not a numeric test: an empty or non-numeric value makes
+          # `[ "$x" -gt N ]` error under `set -e`, and an error must not be the
+          # thing that decides whether an unmeasured request gets sent.
+          case "$INPUT_TOKENS" in
+            ''|*[!0-9]*)
+              echo "::warning::count_tokens returned no usable input_tokens"
+              RO_STATUS=unmeasured
+              RO_REASON="The review could not read a token count for this pull request, so it did not send it."
+              return 0
+              ;;
+          esac
+
+          RO_TOKENS="$INPUT_TOKENS"
+          echo "Measured request size: ${INPUT_TOKENS} input tokens (budget ${TOKEN_BUDGET})"
+
+          # WRITTEN HERE, NOT BY THE CALLER, and that is not a style choice. The
+          # revision every consumer is pinned to recorded the measurement the
+          # instant it had one -- before the budget compare and before the send.
+          # Hoisting it out to the caller looked equivalent and is not: any death
+          # inside this function (curl exiting non-zero on a transport failure,
+          # say) then loses a measurement that was already taken, and single mode
+          # stops being byte-identical to the pinned revision on exactly the paths
+          # nobody rehearses. Batch mode reports the SUM, so it writes its own,
+          # once, after the loop.
+          if [ "$BATCH_MODE" = "0" ]; then
+            echo "input_tokens=$INPUT_TOKENS" >> "$GITHUB_OUTPUT"
+          fi
+
+          if [ "$INPUT_TOKENS" -gt "$TOKEN_BUDGET" ]; then
+            RO_STATUS=over-budget
+            RO_REASON="This pull request is ${INPUT_TOKENS} input tokens, over the ${TOKEN_BUDGET} token review budget. It genuinely does not fit in the model's context window, so an automated verdict would describe only part of the change."
+            return 0
+          fi
+
+          RO_PATH=primary
+          HTTP_CODE=$(send /tmp/request.json)
+          REVIEW_TEXT=""
           [ "$HTTP_CODE" = "200" ] && REVIEW_TEXT=$(extract)
-        fi
 
-        # The path is reported only once a request has actually produced a review.
-        # `REVIEW_PATH` is set to `fallback` BEFORE the retry is attempted, so
-        # announcing it here unconditionally meant a run where the primary AND the
-        # retry both failed still logged "Review produced by the fallback request."
-        # and handed callers `review_path=fallback` next to an INCONCLUSIVE verdict
-        # -- every consumer then published a footer crediting a retry that returned
-        # nothing. This line is also the evidence used to verify each adoption of
-        # this action, so of all the lines here it is the one that must not lie.
-        #
-        # `none` is a THIRD state, distinct from the empty output the earlier exits
-        # leave behind: empty means no request was ever sent (no key, over budget),
-        # `none` means requests were sent and none of them answered.
-        if [ -z "$REVIEW_TEXT" ]; then
-          echo "review_path=none" >> "$GITHUB_OUTPUT"
-          echo "No model request produced a review; the primary and any retry both failed."
-          ERROR=$(jq -r '.error.message // "no error message"' /tmp/response.json 2>/dev/null || echo "unreadable response body")
-          echo "::warning::Claude API call produced no review (HTTP $HTTP_CODE): $ERROR"
-          inconclusive "The automated review could not be completed (HTTP $HTTP_CODE: $ERROR)."
-        fi
+          # FALLBACK: retry without thinking. Only when thinking was actually on --
+          # otherwise the retry is byte-identical to the request that just failed and
+          # is pure cost. The SAME nonce is reused: a fresh one would mean the model
+          # was told a different marker than the one being checked, so every fallback
+          # review would go INCONCLUSIVE.
+          if [ -z "$REVIEW_TEXT" ] && [ "$THINKING_BUDGET" -gt 0 ]; then
+            echo "::warning::Primary review request failed (HTTP $HTTP_CODE); retrying without extended thinking."
+            RO_PATH=fallback
+            build_request 0 "$FALLBACK_MAX_TOKENS" "$1" > /tmp/request_fallback.json
+            HTTP_CODE=$(send /tmp/request_fallback.json)
+            [ "$HTTP_CODE" = "200" ] && REVIEW_TEXT=$(extract)
+          fi
 
-        echo "review_path=$REVIEW_PATH" >> "$GITHUB_OUTPUT"
-        echo "Review produced by the $REVIEW_PATH request."
+          # `none` is a THIRD state, distinct from the empty output the earlier
+          # exits leave behind: empty means no request was ever sent (no key, over
+          # budget), `none` means requests were sent and none of them answered.
+          if [ -z "$REVIEW_TEXT" ]; then
+            RO_PATH=none
+            echo "No model request produced a review; the primary and any retry both failed."
+            ERROR=$(jq -r '.error.message // "no error message"' /tmp/response.json 2>/dev/null || echo "unreadable response body")
+            echo "::warning::Claude API call produced no review (HTTP $HTTP_CODE): $ERROR"
+            RO_STATUS=no-review
+            RO_REASON="The automated review could not be completed (HTTP $HTTP_CODE: $ERROR)."
+            return 0
+          fi
 
-        # Strip the marker line out of what gets posted. Echoing the nonce into a
-        # comment would let a later run read it back, which is the attack it exists
-        # to stop. The exact-nonce strip is its own statement and stays first: it is
-        # the anti-replay control, and the shape rules below must never absorb it.
-        # It is a silent deletion because that line is our marker, never reviewer
-        # content.
-        RAW_FILE=/tmp/claude_review_raw.txt
-        printf '%s\n' "$REVIEW_TEXT" | grep -v -- "VERDICT-$NONCE:" > "$RAW_FILE" || true
+          RO_TEXT="$REVIEW_TEXT"
+          RO_STATUS=ok
+          return 0
+        }
 
-        # Then redact the gate's own output FORMAT from what gets posted. Two
+        # Redact the gate's own output FORMAT from what gets posted. Two
         # families: the bare verdict form under a markdown leader (markdown's own
         # leader syntax is letterless, so the anchor terminates at the first
         # letter), and the internal marker form with a nonce-shaped token, matched
@@ -344,65 +434,282 @@ runs:
         # The pinned locale is load-bearing for non-ASCII leaders, so its health
         # is probed at runtime through the same matcher the redaction uses, and a
         # degraded run says so in the posted body instead of degrading silently.
+        #
+        # This runs ONCE, over the whole body about to be posted. In batch mode
+        # that body is every completed batch concatenated -- the exact-nonce
+        # deletions have already run per batch, with each batch's own nonce,
+        # because one statement can only carry one nonce and there are N of them.
         FMT='^[[:punct:][:space:][:digit:]]*VERDICT(-[0-9A-Za-z]+)?[[:punct:][:space:]]*:'
         FORGED='VERDICT-[0-9A-Za-z_-]{8,}[[:punct:][:space:]]*:'
         PLACEHOLDER='[redacted: this line matched the gate'"'"'s verdict-line format — see the diff for the original text]'
         redaction_match() { LC_ALL=C.UTF-8 grep -qEi -e "$FMT" -e "$FORGED"; }
 
-        LOCALE_DEGRADED=0
-        if ! printf '\342\200\224 VERDICT: APPROVE\n' | redaction_match 2>/dev/null; then
-          echo "::warning::C.UTF-8 is unavailable to grep on this runner; the redaction ran ASCII-only."
-          LOCALE_DEGRADED=1
-        fi
-
-        REDACTED=0
-        : > "$REVIEW_FILE"
-        while IFS= read -r REVIEW_LINE; do
-          if printf '%s\n' "$REVIEW_LINE" | redaction_match; then
-            printf '%s\n' "$PLACEHOLDER" >> "$REVIEW_FILE"
-            REDACTED=$((REDACTED+1))
-          else
-            printf '%s\n' "$REVIEW_LINE" >> "$REVIEW_FILE"
+        redact_body() {
+          LOCALE_DEGRADED=0
+          if ! printf '\342\200\224 VERDICT: APPROVE\n' | redaction_match 2>/dev/null; then
+            echo "::warning::C.UTF-8 is unavailable to grep on this runner; the redaction ran ASCII-only."
+            LOCALE_DEGRADED=1
           fi
-        done < "$RAW_FILE"
-        rm -f "$RAW_FILE"
-        if [ "$REDACTED" -gt 0 ]; then
-          printf '\n*%s line(s) matching this gate'"'"'s own verdict format were replaced with a placeholder above. The verdict is the one this check reports.*\n' "$REDACTED" >> "$REVIEW_FILE"
-        fi
-        if [ "$LOCALE_DEGRADED" = "1" ]; then
-          printf '\n*redaction ran ASCII-only — this runner lacks C.UTF-8; non-ASCII leader forms were not stripped.*\n' >> "$REVIEW_FILE"
-        fi
 
-        # EXACT match on the whole first line, nonce included. A first line that
-        # merely CONTAINS "APPROVE" is not enough: the diff is attacker-authored
-        # text and a model can be pushed to echo a verdict-shaped line, so the
-        # binding to THIS run is the check.
-        # TRAILING whitespace only, and deliberately NOT leading. The prompt
-        # instructs the model to begin its reply with the verdict line and
-        # "nothing whatsoever before it", so forgiving leading whitespace would
-        # waive a term the prompt states and quietly retire the instruction.
-        # Trailing whitespace is not forbidden anywhere and is invisible, so a
-        # required merge gate must not turn one emitted space into a red check.
-        # This normalisation cannot weaken the binding: every string it newly
-        # accepts still has to carry this run's 128-bit nonce, which is minted
-        # after the diff is fixed and stripped before the review is posted.
-        FIRST_LINE=$(printf '%s\n' "$REVIEW_TEXT" | sed -n '1p' | sed 's/[[:space:]]*$//')
-        if [ "$FIRST_LINE" = "VERDICT-$NONCE: APPROVE" ]; then
-          echo "verdict=APPROVE" >> "$GITHUB_OUTPUT"
-        elif [ "$FIRST_LINE" = "VERDICT-$NONCE: REQUEST_CHANGES" ]; then
-          echo "verdict=REQUEST_CHANGES" >> "$GITHUB_OUTPUT"
+          REDACTED=0
+          : > "$REVIEW_FILE"
+          while IFS= read -r REVIEW_LINE; do
+            if printf '%s\n' "$REVIEW_LINE" | redaction_match; then
+              printf '%s\n' "$PLACEHOLDER" >> "$REVIEW_FILE"
+              REDACTED=$((REDACTED+1))
+            else
+              printf '%s\n' "$REVIEW_LINE" >> "$REVIEW_FILE"
+            fi
+          done < "$RAW_FILE"
+          rm -f "$RAW_FILE"
+          if [ "$REDACTED" -gt 0 ]; then
+            printf '\n*%s line(s) matching this gate'"'"'s own verdict format were replaced with a placeholder above. The verdict is the one this check reports.*\n' "$REDACTED" >> "$REVIEW_FILE"
+          fi
+          if [ "$LOCALE_DEGRADED" = "1" ]; then
+            printf '\n*redaction ran ASCII-only — this runner lacks C.UTF-8; non-ASCII leader forms were not stripped.*\n' >> "$REVIEW_FILE"
+          fi
+        }
+
+        if [ "$BATCH_MODE" = "0" ]; then
+          mint_nonce
+          review_once "$USER_MESSAGE_FILE"
+
+          case "$RO_STATUS" in
+            unmeasured|over-budget)
+              inconclusive "$RO_REASON"
+              ;;
+            no-review)
+              echo "review_path=none" >> "$GITHUB_OUTPUT"
+              inconclusive "$RO_REASON"
+              ;;
+          esac
+
+          # The path is reported only once a request has actually produced a review.
+          # `RO_PATH` is set to `fallback` BEFORE the retry is attempted, so
+          # announcing it unconditionally meant a run where the primary AND the
+          # retry both failed still logged "Review produced by the fallback request."
+          # and handed callers `review_path=fallback` next to an INCONCLUSIVE verdict
+          # -- every consumer then published a footer crediting a retry that returned
+          # nothing. This line is also the evidence used to verify each adoption of
+          # this action, so of all the lines here it is the one that must not lie.
+          echo "review_path=$RO_PATH" >> "$GITHUB_OUTPUT"
+          echo "Review produced by the $RO_PATH request."
+
+          REVIEW_TEXT="$RO_TEXT"
+
+          # Strip the marker line out of what gets posted. Echoing the nonce into a
+          # comment would let a later run read it back, which is the attack it exists
+          # to stop. The exact-nonce strip is its own statement and stays first: it is
+          # the anti-replay control, and the shape rules below must never absorb it.
+          # It is a silent deletion because that line is our marker, never reviewer
+          # content.
+          printf '%s\n' "$REVIEW_TEXT" | grep -v -- "VERDICT-$NONCE:" > "$RAW_FILE" || true
+          redact_body
+
+          # EXACT match on the whole first line, nonce included. A first line that
+          # merely CONTAINS "APPROVE" is not enough: the diff is attacker-authored
+          # text and a model can be pushed to echo a verdict-shaped line, so the
+          # binding to THIS run is the check.
+          # TRAILING whitespace only, and deliberately NOT leading. The prompt
+          # instructs the model to begin its reply with the verdict line and
+          # "nothing whatsoever before it", so forgiving leading whitespace would
+          # waive a term the prompt states and quietly retire the instruction.
+          # Trailing whitespace is not forbidden anywhere and is invisible, so a
+          # required merge gate must not turn one emitted space into a red check.
+          # This normalisation cannot weaken the binding: every string it newly
+          # accepts still has to carry this run's 128-bit nonce, which is minted
+          # after the diff is fixed and stripped before the review is posted.
+          FIRST_LINE=$(printf '%s\n' "$REVIEW_TEXT" | sed -n '1p' | sed 's/[[:space:]]*$//')
+          if [ "$FIRST_LINE" = "VERDICT-$NONCE: APPROVE" ]; then
+            echo "verdict=APPROVE" >> "$GITHUB_OUTPUT"
+          elif [ "$FIRST_LINE" = "VERDICT-$NONCE: REQUEST_CHANGES" ]; then
+            echo "verdict=REQUEST_CHANGES" >> "$GITHUB_OUTPUT"
+          else
+            # APPEND the reason -- do not call inconclusive(), whose truncating write
+            # would destroy the review text saved above. This is the one failure that
+            # happens AFTER the model produced real findings (a preamble ahead of the
+            # verdict line is enough), and those findings are exactly what the human
+            # who must now review needs. Every copy this action replaced appended
+            # here; consolidation must not drop a defence all nine copies had. The
+            # verdict is still INCONCLUSIVE, and the caller still fails the job on it
+            # -- what is preserved is the text, not the outcome. The nonce strip has
+            # already run on this text, so nothing here re-exposes the marker.
+            echo "::warning::Could not parse a verdict from the first line of the review."
+            echo "verdict=INCONCLUSIVE" >> "$GITHUB_OUTPUT"
+            printf '\n---\n%s\n\nThis is not an approval. A human review is required. The text above is the model'"'"'s unverified output, preserved so its findings are not lost.\n' \
+              "The automated review did not begin with a verdict line bound to this run, so no verdict was recorded." >> "$REVIEW_FILE"
+          fi
         else
-          # APPEND the reason -- do not call inconclusive(), whose truncating write
-          # would destroy the review text saved above. This is the one failure that
-          # happens AFTER the model produced real findings (a preamble ahead of the
-          # verdict line is enough), and those findings are exactly what the human
-          # who must now review needs. Every copy this action replaced appended
-          # here; consolidation must not drop a defence all nine copies had. The
-          # verdict is still INCONCLUSIVE, and the caller still fails the job on it
-          # -- what is preserved is the text, not the outcome. The nonce strip has
-          # already run on this text, so nothing here re-exposes the marker.
-          echo "::warning::Could not parse a verdict from the first line of the review."
-          echo "verdict=INCONCLUSIVE" >> "$GITHUB_OUTPUT"
-          printf '\n---\n%s\n\nThis is not an approval. A human review is required. The text above is the model'"'"'s unverified output, preserved so its findings are not lost.\n' \
-            "The automated review did not begin with a verdict line bound to this run, so no verdict was recorded." >> "$REVIEW_FILE"
+          [ -d "$BATCH_DIR" ] || inconclusive "The review could not run: batch-dir \`$BATCH_DIR\` is not a directory, so there were no batches to review."
+
+          case "${MAX_BATCHES:-}" in
+            ''|*[!0-9]*) inconclusive "The review could not run: max-batches must be a number." ;;
+          esac
+          [ "$MAX_BATCHES" -gt 0 ] || inconclusive "The review could not run: max-batches must be greater than zero."
+
+          # THE BATCH COUNT IS PINNED HERE, BEFORE ANY REQUEST IS SENT, and every
+          # later question about completeness is asked against this number rather
+          # than against how far the loop got. Sorted with the collation pinned to
+          # C, so the caller controls the order through its filenames and a
+          # runner's locale cannot silently renumber `Batch k/N`.
+          # `dotglob` is load-bearing, not tidiness. Without it a batch named
+          # with a leading dot is invisible to the glob -- and therefore missing
+          # from the pinned count AND from the loop, which agree with each other
+          # while the pull request gets reviewed in part. Counting cannot detect
+          # what the count itself never saw. With it on, such a file is reviewed,
+          # or refused out loud; neither is a silent partial review.
+          shopt -s nullglob dotglob
+          BATCH_GLOB=("$BATCH_DIR"/*)
+          shopt -u nullglob dotglob
+          BATCH_LIST=()
+          if [ "${#BATCH_GLOB[@]}" -gt 0 ]; then
+            while IFS= read -r -d '' BATCH_ENTRY; do
+              BATCH_LIST+=("$BATCH_ENTRY")
+            done < <(printf '%s\0' "${BATCH_GLOB[@]}" | LC_ALL=C sort -z)
+          fi
+          BATCH_COUNT=${#BATCH_LIST[@]}
+
+          if [ "$BATCH_COUNT" -eq 0 ]; then
+            inconclusive "The review could not run: batch mode was requested but \`$BATCH_DIR\` holds no batch files, so there was nothing to review."
+          fi
+
+          # REFUSED BEFORE THE FIRST CALL, not part-way through. The ceiling is
+          # what bounds cost by construction, so it has to be decided before any
+          # money is spent, and the message has to state the way forward.
+          if [ "$BATCH_COUNT" -gt "$MAX_BATCHES" ]; then
+            inconclusive "This pull request needed $BATCH_COUNT review batches, over the $MAX_BATCHES-batch ceiling, so no review was sent. Split it into smaller pull requests and each one will be reviewed."
+          fi
+
+          # Refuse a malformed batch directory rather than guessing which entries
+          # were meant to be reviewed: silently skipping one would make the pinned
+          # count agree with a loop that reviewed less than the caller partitioned.
+          for BATCH_ENTRY in "${BATCH_LIST[@]}"; do
+            [ -f "$BATCH_ENTRY" ] || inconclusive "The review could not run: \`$BATCH_ENTRY\` in the batch directory is not a regular file."
+            [ -s "$BATCH_ENTRY" ] || inconclusive "The review could not run: batch file \`$BATCH_ENTRY\` is empty, so there was nothing to review in it."
+          done
+
+          # THE AGGREGATE STARTS INCONCLUSIVE. Nothing below assigns anything else
+          # except the one branch that first proves every pinned batch returned a
+          # verdict bound to its own nonce. An incomplete review therefore cannot
+          # reach a pass by any path, including paths added later.
+          AGG_VERDICT=INCONCLUSIVE
+          AGG_REASON=""
+          ANSWERED=0
+          PRODUCED=0
+          SENT_ANY=0
+          SAW_REQUEST_CHANGES=0
+          SAW_FALLBACK=0
+          TOTAL_TOKENS=0
+          MEASURED_ANY=0
+          BATCH_INDEX=0
+          : > "$RAW_FILE"
+
+          for BATCH_ENTRY in "${BATCH_LIST[@]}"; do
+            BATCH_INDEX=$((BATCH_INDEX + 1))
+            echo "Reviewing batch $BATCH_INDEX/$BATCH_COUNT: $BATCH_ENTRY"
+
+            mint_nonce
+            review_once "$BATCH_ENTRY"
+
+            if [ -n "$RO_TOKENS" ]; then
+              TOTAL_TOKENS=$((TOTAL_TOKENS + RO_TOKENS))
+              MEASURED_ANY=1
+            fi
+            if [ -n "$RO_PATH" ]; then
+              SENT_ANY=1
+            fi
+
+            # STOP THE LOOP. Carrying on would spend the rest of the ceiling to
+            # reach an aggregate that is INCONCLUSIVE either way, and would turn
+            # "did every batch answer?" into a question about how far iteration
+            # got instead of a count.
+            if [ "$RO_STATUS" != "ok" ]; then
+              AGG_REASON="Batch $BATCH_INDEX of $BATCH_COUNT did not produce a review, so this pull request was not reviewed in full. $RO_REASON"
+              break
+            fi
+
+            PRODUCED=$((PRODUCED + 1))
+            if [ "$RO_PATH" = "fallback" ]; then
+              SAW_FALLBACK=1
+            fi
+
+            # THE EXACT-NONCE DELETION RUNS HERE, PER BATCH, WITH THIS BATCH'S
+            # NONCE, BEFORE CONCATENATION -- it cannot be deferred to the whole
+            # body, because that statement carries exactly one nonce and batch
+            # mode has N. The two shape families run once, later, over everything.
+            printf '## Batch %s/%s\n\n' "$BATCH_INDEX" "$BATCH_COUNT" >> "$RAW_FILE"
+            printf '%s\n' "$RO_TEXT" | grep -v -- "VERDICT-$NONCE:" >> "$RAW_FILE" || true
+            printf '\n' >> "$RAW_FILE"
+
+            # THIS BATCH'S FIRST LINE AGAINST THIS BATCH'S OWN NONCE. A
+            # verdict-shaped line addressed to a different batch decides nothing
+            # here: it is not this batch's nonce, so it is not this batch's
+            # verdict, and the count below then reports a batch that never
+            # answered.
+            BATCH_FIRST_LINE=$(printf '%s\n' "$RO_TEXT" | sed -n '1p' | sed 's/[[:space:]]*$//')
+            if [ "$BATCH_FIRST_LINE" = "VERDICT-$NONCE: APPROVE" ]; then
+              ANSWERED=$((ANSWERED + 1))
+            elif [ "$BATCH_FIRST_LINE" = "VERDICT-$NONCE: REQUEST_CHANGES" ]; then
+              ANSWERED=$((ANSWERED + 1))
+              SAW_REQUEST_CHANGES=1
+            else
+              echo "::warning::Batch $BATCH_INDEX/$BATCH_COUNT did not begin with a verdict line bound to this run."
+              AGG_REASON="Batch $BATCH_INDEX of $BATCH_COUNT did not begin with a verdict line bound to this run, so no verdict was recorded for it and this pull request was not reviewed in full."
+              break
+            fi
+          done
+
+          # COUNT-VERIFIED, NOT ITERATION-VERIFIED. `ANSWERED` is compared with the
+          # count pinned before the loop, so a batch that never returned a verdict
+          # is caught by arithmetic: a `break` above, a batch file that disappeared
+          # mid-run, and a loop that silently skipped an entry all fail here the
+          # same way, and none of them can be mistaken for "the loop reached the
+          # end, so everything must have been reviewed".
+          if [ "$ANSWERED" -eq "$BATCH_COUNT" ]; then
+            if [ "$SAW_REQUEST_CHANGES" = "1" ]; then
+              AGG_VERDICT=REQUEST_CHANGES
+            else
+              AGG_VERDICT=APPROVE
+            fi
+          elif [ -z "$AGG_REASON" ]; then
+            AGG_REASON="Only $ANSWERED of $BATCH_COUNT review batches returned a verdict, so this pull request was not reviewed in full."
+          fi
+
+          if [ "$MEASURED_ANY" = "1" ]; then
+            echo "input_tokens=$TOTAL_TOKENS" >> "$GITHUB_OUTPUT"
+          fi
+
+          # `primary` only if EVERY batch that produced a review did so on its
+          # primary request: one batch that needed the retry makes the whole run
+          # a fallback run, because that is the fact a caller surfaces.
+          if [ "$PRODUCED" -eq 0 ]; then
+            if [ "$SENT_ANY" = "1" ]; then
+              echo "review_path=none" >> "$GITHUB_OUTPUT"
+            fi
+          elif [ "$SAW_FALLBACK" = "1" ]; then
+            echo "review_path=fallback" >> "$GITHUB_OUTPUT"
+            echo "Review produced by the fallback request in at least one batch."
+          else
+            echo "review_path=primary" >> "$GITHUB_OUTPUT"
+            echo "Review produced by the primary request in every batch."
+          fi
+
+          echo "Batches reviewed: $ANSWERED of $BATCH_COUNT; aggregate verdict $AGG_VERDICT."
+
+          redact_body
+
+          # The reason is appended AFTER the redaction, exactly as the single-mode
+          # parse failure does, so the sentence explaining why there is no verdict
+          # can never itself be replaced by a placeholder.
+          if [ "$AGG_VERDICT" = "INCONCLUSIVE" ]; then
+            if [ "$PRODUCED" -gt 0 ]; then
+              AGG_TAIL="The text above is the review of the batches that completed, preserved so their findings are not lost."
+            else
+              AGG_TAIL="No batch produced a review."
+            fi
+            printf '\n---\n%s\n\nThis is not an approval. A human review is required. %s\n' \
+              "$AGG_REASON" "$AGG_TAIL" >> "$REVIEW_FILE"
+          fi
+
+          echo "verdict=$AGG_VERDICT" >> "$GITHUB_OUTPUT"
         fi

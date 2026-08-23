@@ -128,6 +128,65 @@ reason — the findings are exactly what the human who must now review needs, an
 nonce has already been stripped from them. Every failure *before* a reply exists
 still replaces the body outright.
 
+## Batch mode — for pull requests that genuinely do not fit
+
+**Off unless you set `batch-dir`, and off is the org default.** With it unset the
+action sends exactly one request and behaves exactly as it did before batch mode
+existed — `test/single_mode_identity.py` proves that literally, by replaying every
+single-mode case against a frozen copy of the pre-batch-mode action and comparing
+outputs, body, stdout, stderr and exit code byte for byte.
+
+Turn it on only where a chief has **measured** a class of pull requests over the
+window. This is not the answer to a gate refusing something that fits: if the
+payload fits, the instrument is wrong, and the fix is the instrument. One measured
+case that genuinely does not fit: a diff at **259,622 input tokens** against a
+200,000-token window.
+
+The caller partitions; the action loops:
+
+```yaml
+      - id: review
+        uses: opena2a-org/.github/actions/claude-review@PIN_A_SHA
+        with:
+          anthropic-api-key: SECRET_REFERENCE
+          system-prompt-file: /tmp/system_prompt.txt
+          user-message-file: /tmp/user_msg.txt   # unused in batch mode
+          batch-dir: /tmp/review-batches         # each regular file = one request
+          max-batches: "8"
+```
+
+**What the caller owns.** How the diff is cut. That answer is repo-shaped — file
+boundaries, which hunks travel with which full-file context, what per-batch size
+target to aim at — so it stays in your `pr-review.yml`. Two rules bind any
+partitioner: count the **composed** batch (prompt + context + diff), not the diff
+alone; and a single file too big for one batch is `INCONCLUSIVE`, with no
+file-type carve-out, because a file-type predicate is author-controllable.
+
+**What the action owns**, so that it cannot vary between repos:
+
+- **A fresh nonce per batch.** Batch 2's reply cannot satisfy batch 1's check.
+- **A `count_tokens` measurement per batch**, against the same `token-budget`.
+  The budget is per batch; it is not divided among them and it is not raised. A
+  mis-partitioned batch fails closed here — there is no re-split loop.
+- **Fail-closed aggregation.** Any `REQUEST_CHANGES` → `REQUEST_CHANGES`. All
+  `APPROVE` → `APPROVE`. A batch that errors, cannot be measured, is over budget,
+  returns no verdict bound to its own nonce, or never ran → `INCONCLUSIVE`, **and
+  the loop stops there**. Over `max-batches` → `INCONCLUSIVE` before the first
+  request is sent, saying to split the pull request.
+- **The aggregate starts `INCONCLUSIVE`** and is upgraded only by a completed
+  all-batch pass, verified by **counting** verdicts against a batch count pinned
+  before the loop. "Every batch answered" is arithmetic, not "the loop reached the
+  end" — those differ precisely when something went wrong.
+
+Outputs extend rather than change: `input-tokens` is the sum over measured
+batches, `review-path` is `primary` only if **every** batch that produced a review
+did so on its primary request, and `review-file` holds every completed batch under
+`Batch k/N` headings — including when a later batch failed, because the findings a
+completed batch produced are exactly what the human who must now review needs.
+
+Cost is bounded by construction: at most `max-batches` review calls plus one
+`count_tokens` each, per pull request.
+
 ## Pin a SHA, not `@main`
 
 `@main` moves every consuming repo the instant this file changes — a bad edit here
@@ -159,9 +218,15 @@ Read the extraction note in `action.yml` first. The `token-budget` default assum
 
 ## Tests
 
-`action.yml` is exercised by a harness that stubs `curl` and runs the whole step
-across **21 response shapes**, plus **12 mutants** that each remove one guard. All
-21 correct; all 12 caught.
+Three suites, all of which must be green. Counts are deliberately not written down
+here — an earlier version of this section carried literals that were stale within a
+release. Run them and read the totals off the run:
+
+```sh
+python3 test/harness.py action.yml                     # response shapes, single + batch
+python3 test/mutants.py action.yml test/harness.py     # non-vacuity control
+python3 test/single_mode_identity.py action.yml        # batch mode changed nothing
+```
 
 The stub reads the nonce out of the request it is handed and answers with it, so the
 binding is exercised rather than assumed. It tells the primary request from the
