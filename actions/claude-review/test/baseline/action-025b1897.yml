@@ -1,0 +1,408 @@
+name: Claude review call
+description: >-
+  Measure a review request against the model's context window, send it, and
+  return a verdict. The shared half of every repo's PR review gate.
+
+# WHY THIS IS AN ACTION AND NOT A REUSABLE WORKFLOW.
+#
+# `Claude Code Review` is a REQUIRED status context on main in several repos.
+# Re-derive the current set instead of trusting any recorded count:
+#
+#   for r in ai-trust agent-runtime-protection oasb nanomind hackmyagent \
+#            secretless-ai agent-identity-management damn-vulnerable-ai-agent \
+#            opena2a-registry; do
+#     printf '%-28s %s\n' "$r" "$(gh api repos/opena2a-org/$r/branches/main/protection \
+#       --jq '.required_status_checks.contexts | map(select(. == "Claude Code Review")) | length')"
+#   done
+#
+# A reusable workflow called at the job level renames its check to
+# `<caller-job> / <called-job>`, so the required context would never appear
+# again and every pull request in every one of those repos would block until
+# branch protection was edited in each -- a coordinated multi-repo change where
+# any slip is an outage. A composite action is a STEP inside the caller's
+# existing job, so the job name, and therefore the check name, is untouched.
+# Same goal, none of that.
+#
+# WHAT THIS OWNS, AND WHAT IT DELIBERATELY DOES NOT.
+#
+# Three defects have been found in this gate, and all three lived in the model
+# call: an `anthropic-version` the API rejected outright (so every review ever
+# produced came from the fallback), an extraction reading `.content[0].text`
+# (which truncated multi-block replies and would have blocked every PR the day a
+# model pin emitted thinking blocks), and a byte cap standing in for a token
+# budget (refusing at about a fifth of the window). Copy-paste is how one defect
+# became nine. So the model call is shared here.
+#
+# The system prompt is NOT shared: each repo's tech stack and review focus are
+# legitimately its own. Nor is diff gathering or review posting, which depend on
+# per-repo permissions and formatting. Share what drifted; keep local what
+# should vary.
+
+inputs:
+  anthropic-api-key:
+    description: >-
+      API key. A composite action cannot read `secrets`, so the caller passes it
+      explicitly from its own secret.
+    required: true
+  system-prompt-file:
+    description: Path to the rendered system prompt.
+    required: true
+  user-message-file:
+    description: Path to the rendered user message (PR title, body, file list, diff).
+    required: true
+  model:
+    description: Model id. Changing this REQUIRES re-reading the extraction note below.
+    required: false
+    default: claude-sonnet-4-5-20250929
+  max-tokens:
+    description: Output token cap for the review itself.
+    required: false
+    default: "4096"
+  thinking-budget:
+    description: >-
+      Extended-thinking budget in tokens. `0` disables thinking entirely. When
+      set, `max-tokens` must be strictly greater (the API requires it) or the run
+      is INCONCLUSIVE with that stated — discovering it as a 400 at review time
+      would be a silent gate outage. 8 of the 9 copies this action replaces used
+      10000, with `max-tokens: 16000`.
+    required: false
+    default: "0"
+  fallback-max-tokens:
+    description: >-
+      `max_tokens` for the retry that runs without thinking after a failed
+      primary. Only used when `thinking-budget` is non-zero.
+    required: false
+    default: "8192"
+  nonce-placeholder:
+    description: >-
+      Token in the system prompt that is replaced with a per-run nonce. The
+      prompt MUST instruct the model to begin its reply with
+      `VERDICT-<placeholder>: APPROVE` or `VERDICT-<placeholder>: REQUEST_CHANGES`,
+      and the reply's first line must then match exactly. A prompt without this
+      token is INCONCLUSIVE rather than silently unverified. Must be
+      `[A-Za-z0-9_]+`.
+    required: false
+    default: "__NONCE__"
+  token-budget:
+    description: >-
+      Maximum measured INPUT tokens. Over this, the request is not sent and the
+      verdict is INCONCLUSIVE. Default 180000 against a 200000 window: it leaves
+      room for the output and roughly 16K of slack, and is still about four
+      times the largest diff ever measured against this gate (47,133 tokens).
+    required: false
+    default: "180000"
+
+outputs:
+  verdict:
+    description: APPROVE, REQUEST_CHANGES or INCONCLUSIVE. Never empty.
+    value: ${{ steps.call.outputs.verdict }}
+  review-file:
+    description: Path to the review body, written for every verdict including INCONCLUSIVE.
+    value: ${{ steps.call.outputs.review_file }}
+  input-tokens:
+    description: Measured input tokens, or empty when the measurement itself failed.
+    value: ${{ steps.call.outputs.input_tokens }}
+  review-path:
+    description: >-
+      `primary` or `fallback` — which request produced the verdict. A fallback
+      that runs on every PR is indistinguishable from a primary that works, which
+      is how an invalid API version went unnoticed across nine repos, so callers
+      should surface this. `none` when requests were sent and none produced a
+      review; EMPTY when no request was sent at all (no key, or over the token
+      budget). Callers must not render `none` or empty as a completed review.
+    value: ${{ steps.call.outputs.review_path }}
+
+runs:
+  using: composite
+  steps:
+    - id: call
+      shell: bash
+      env:
+        REVIEW_API_KEY: ${{ inputs.anthropic-api-key }}
+        SYSTEM_PROMPT_FILE: ${{ inputs.system-prompt-file }}
+        USER_MESSAGE_FILE: ${{ inputs.user-message-file }}
+        MODEL: ${{ inputs.model }}
+        MAX_TOKENS: ${{ inputs.max-tokens }}
+        TOKEN_BUDGET: ${{ inputs.token-budget }}
+        NONCE_PLACEHOLDER: ${{ inputs.nonce-placeholder }}
+        THINKING_BUDGET: ${{ inputs.thinking-budget }}
+        FALLBACK_MAX_TOKENS: ${{ inputs.fallback-max-tokens }}
+      run: |
+        set -euo pipefail
+
+        REVIEW_FILE=/tmp/claude_review_body.txt
+        echo "review_file=$REVIEW_FILE" >> "$GITHUB_OUTPUT"
+
+        # Every exit below records exactly one verdict, and INCONCLUSIVE is a
+        # third state rather than a pass -- the caller is expected to fail the
+        # job on it. Nothing here resolves a failure into APPROVE.
+        inconclusive() {
+          echo "verdict=INCONCLUSIVE" >> "$GITHUB_OUTPUT"
+          printf '%s\n\nThis is not an approval. A human review is required.\n' "$1" > "$REVIEW_FILE"
+          exit 0
+        }
+
+        if [ -z "${REVIEW_API_KEY:-}" ]; then
+          echo "::warning::No API key was provided to the review action."
+          inconclusive "The review could not run: no API key was available to this run."
+        fi
+        for f in "$SYSTEM_PROMPT_FILE" "$USER_MESSAGE_FILE"; do
+          [ -s "$f" ] || inconclusive "The review could not run: \`$f\` is missing or empty, so there was nothing to review."
+        done
+
+        # PER-RUN NONCE. The verdict is read back as `VERDICT-<nonce>:`, so the
+        # marker cannot be pre-placed in an attacker-authored diff: the value does
+        # not exist until this step runs. Every repo's gate already did this in its
+        # own copy. It lives here now because a property held in nine copies is one
+        # nine repos can each forget -- and the first pilot of this action would
+        # have silently dropped it.
+        case "$NONCE_PLACEHOLDER" in
+          ''|*[!A-Za-z0-9_]*)
+            inconclusive "The review could not run: nonce-placeholder must match [A-Za-z0-9_]+, and it does not. It is substituted with sed, so a placeholder carrying pattern characters is refused rather than guessed at."
+            ;;
+        esac
+
+        NONCE=$(head -c 16 /dev/urandom | xxd -p)
+
+        if ! grep -qF -- "$NONCE_PLACEHOLDER" "$SYSTEM_PROMPT_FILE"; then
+          inconclusive "The review could not run: the system prompt does not contain the nonce placeholder, so the verdict could not be bound to this run. Add it to the prompt's verdict instruction."
+        fi
+
+        # Substitute into a COPY, so the caller's file is untouched. Both sides are
+        # [A-Za-z0-9_]+ -- the placeholder by the guard above, the nonce because it
+        # is hex -- so neither can carry a sed metacharacter.
+        RENDERED_SYSTEM=/tmp/claude_review_system.txt
+        sed "s/$NONCE_PLACEHOLDER/$NONCE/g" "$SYSTEM_PROMPT_FILE" > "$RENDERED_SYSTEM"
+
+        case "$THINKING_BUDGET" in
+          ''|*[!0-9]*) inconclusive "The review could not run: thinking-budget must be a number." ;;
+        esac
+
+        # The API requires max_tokens > thinking.budget_tokens. Refusing here, with
+        # the reason, beats discovering it as a 400 at review time -- that would be
+        # a required check failing for a cause nobody can see from the verdict.
+        if [ "$THINKING_BUDGET" -gt 0 ] && [ "$MAX_TOKENS" -le "$THINKING_BUDGET" ]; then
+          inconclusive "The review could not run: max-tokens ($MAX_TOKENS) must be greater than thinking-budget ($THINKING_BUDGET)."
+        fi
+
+        build_request() {
+          # $1 = thinking budget for THIS request (0 = off), $2 = max_tokens
+          if [ "$1" -gt 0 ]; then
+            jq -n --rawfile system "$RENDERED_SYSTEM" --rawfile user "$USER_MESSAGE_FILE" \
+              --arg model "$MODEL" --argjson max_tokens "$2" --argjson budget "$1" \
+              '{ model: $model, max_tokens: $max_tokens,
+                 thinking: { type: "enabled", budget_tokens: $budget },
+                 system: $system, messages: [{ role: "user", content: $user }] }'
+          else
+            jq -n --rawfile system "$RENDERED_SYSTEM" --rawfile user "$USER_MESSAGE_FILE" \
+              --arg model "$MODEL" --argjson max_tokens "$2" \
+              '{ model: $model, max_tokens: $max_tokens, system: $system,
+                 messages: [{ role: "user", content: $user }] }'
+          fi
+        }
+
+        build_request "$THINKING_BUDGET" "$MAX_TOKENS" > /tmp/request.json
+
+        # MEASURE THE REQUEST THAT WILL ACTUALLY BE SENT, then decide. This
+        # replaced a 120,000-BYTE cap. Bytes are the wrong instrument for a
+        # token budget, and not by a little: measured on real diffs, 2.8-3.2
+        # bytes per token, so that cap refused at roughly 38-43K tokens -- about
+        # a fifth of the window. It withheld a verdict on exactly the large,
+        # security-relevant changes an automated opinion is worth most on.
+        #
+        # count_tokens REJECTS max_tokens ("Extra inputs are not permitted",
+        # HTTP 400), so it is deleted from the copy sent for measurement. That
+        # is load-bearing: sent as-is it 400s on every run, and a 400 read as
+        # "probably fits" would leave a gate in place that decided nothing.
+        # Only max_tokens is rejected. `thinking` is ACCEPTED and changes the count
+        # (measured: 14 -> 44 input tokens on a trivial request), so it stays --
+        # stripping it would measure a request that is not the one being sent.
+        jq 'del(.max_tokens)' /tmp/request.json > /tmp/count_request.json
+
+        CT_CODE=$(curl -s -o /tmp/count_response.json -w '%{http_code}' \
+          -X POST "https://api.anthropic.com/v1/messages/count_tokens" \
+          -H "Content-Type: application/json" \
+          -H "x-api-key: ${REVIEW_API_KEY}" \
+          -H "anthropic-version: 2023-06-01" \
+          -d @/tmp/count_request.json)
+
+        # A gate that cannot measure the request must not guess that it fits --
+        # that is how a size gate becomes decorative without anyone noticing.
+        if [ "$CT_CODE" != "200" ]; then
+          CT_ERR=$(jq -r '.error.message // "no error message"' /tmp/count_response.json 2>/dev/null || echo "unreadable response body")
+          echo "::warning::count_tokens failed (HTTP $CT_CODE): $CT_ERR"
+          inconclusive "The review could not measure this pull request's size (count_tokens HTTP $CT_CODE: $CT_ERR), so it did not send it."
+        fi
+
+        INPUT_TOKENS=$(jq -r '.input_tokens // empty' /tmp/count_response.json 2>/dev/null || echo "")
+        # `case`, not a numeric test: an empty or non-numeric value makes
+        # `[ "$x" -gt N ]` error under `set -e`, and an error must not be the
+        # thing that decides whether an unmeasured request gets sent.
+        case "$INPUT_TOKENS" in
+          ''|*[!0-9]*)
+            echo "::warning::count_tokens returned no usable input_tokens"
+            inconclusive "The review could not read a token count for this pull request, so it did not send it."
+            ;;
+        esac
+
+        echo "Measured request size: ${INPUT_TOKENS} input tokens (budget ${TOKEN_BUDGET})"
+        echo "input_tokens=$INPUT_TOKENS" >> "$GITHUB_OUTPUT"
+
+        if [ "$INPUT_TOKENS" -gt "$TOKEN_BUDGET" ]; then
+          inconclusive "This pull request is ${INPUT_TOKENS} input tokens, over the ${TOKEN_BUDGET} token review budget. It genuinely does not fit in the model's context window, so an automated verdict would describe only part of the change."
+        fi
+
+        send() {
+          curl -s -o /tmp/response.json -w '%{http_code}' \
+            -X POST "https://api.anthropic.com/v1/messages" \
+            -H "Content-Type: application/json" \
+            -H "x-api-key: ${REVIEW_API_KEY}" \
+            -H "anthropic-version: 2023-06-01" \
+            -d @"$1"
+        }
+
+        # EVERY text block, not content[0]. A multi-block reply silently lost
+        # everything after the first, and with thinking enabled content[0] IS a
+        # thinking block, so `.text` would be null and the review would come back
+        # empty. `(.content // [])` keeps an error body yielding empty rather than
+        # a jq error -- this must fail closed.
+        # CR is stripped HERE, once, rather than at the compare. Every copy this
+        # action replaced normalised `FIRST_LINE` alone, which leaves the nonce
+        # STRIP and the verdict COMPARE reading different text: a CR inside the
+        # nonce would satisfy a normalised compare while `grep -v` failed to
+        # match, accepting the verdict AND leaving the marker in the posted
+        # comment. Normalising the extracted text once removes that asymmetry
+        # instead of inheriting it. `\r` is transport encoding; no prompt can
+        # govern it, so the parser must.
+        extract() {
+          jq -r '[(.content // [])[] | select(.type == "text") | .text] | join("\n")' /tmp/response.json 2>/dev/null | tr -d '\r' || echo ""
+        }
+
+        REVIEW_PATH=primary
+        HTTP_CODE=$(send /tmp/request.json)
+        REVIEW_TEXT=""
+        [ "$HTTP_CODE" = "200" ] && REVIEW_TEXT=$(extract)
+
+        # FALLBACK: retry without thinking. Only when thinking was actually on --
+        # otherwise the retry is byte-identical to the request that just failed and
+        # is pure cost. The SAME nonce is reused: a fresh one would mean the model
+        # was told a different marker than the one being checked, so every fallback
+        # review would go INCONCLUSIVE.
+        if [ -z "$REVIEW_TEXT" ] && [ "$THINKING_BUDGET" -gt 0 ]; then
+          echo "::warning::Primary review request failed (HTTP $HTTP_CODE); retrying without extended thinking."
+          REVIEW_PATH=fallback
+          build_request 0 "$FALLBACK_MAX_TOKENS" > /tmp/request_fallback.json
+          HTTP_CODE=$(send /tmp/request_fallback.json)
+          [ "$HTTP_CODE" = "200" ] && REVIEW_TEXT=$(extract)
+        fi
+
+        # The path is reported only once a request has actually produced a review.
+        # `REVIEW_PATH` is set to `fallback` BEFORE the retry is attempted, so
+        # announcing it here unconditionally meant a run where the primary AND the
+        # retry both failed still logged "Review produced by the fallback request."
+        # and handed callers `review_path=fallback` next to an INCONCLUSIVE verdict
+        # -- every consumer then published a footer crediting a retry that returned
+        # nothing. This line is also the evidence used to verify each adoption of
+        # this action, so of all the lines here it is the one that must not lie.
+        #
+        # `none` is a THIRD state, distinct from the empty output the earlier exits
+        # leave behind: empty means no request was ever sent (no key, over budget),
+        # `none` means requests were sent and none of them answered.
+        if [ -z "$REVIEW_TEXT" ]; then
+          echo "review_path=none" >> "$GITHUB_OUTPUT"
+          echo "No model request produced a review; the primary and any retry both failed."
+          ERROR=$(jq -r '.error.message // "no error message"' /tmp/response.json 2>/dev/null || echo "unreadable response body")
+          echo "::warning::Claude API call produced no review (HTTP $HTTP_CODE): $ERROR"
+          inconclusive "The automated review could not be completed (HTTP $HTTP_CODE: $ERROR)."
+        fi
+
+        echo "review_path=$REVIEW_PATH" >> "$GITHUB_OUTPUT"
+        echo "Review produced by the $REVIEW_PATH request."
+
+        # Strip the marker line out of what gets posted. Echoing the nonce into a
+        # comment would let a later run read it back, which is the attack it exists
+        # to stop. The exact-nonce strip is its own statement and stays first: it is
+        # the anti-replay control, and the shape rules below must never absorb it.
+        # It is a silent deletion because that line is our marker, never reviewer
+        # content.
+        RAW_FILE=/tmp/claude_review_raw.txt
+        printf '%s\n' "$REVIEW_TEXT" | grep -v -- "VERDICT-$NONCE:" > "$RAW_FILE" || true
+
+        # Then redact the gate's own output FORMAT from what gets posted. Two
+        # families: the bare verdict form under a markdown leader (markdown's own
+        # leader syntax is letterless, so the anchor terminates at the first
+        # letter), and the internal marker form with a nonce-shaped token, matched
+        # anywhere in the line because no legitimate sentence contains one.
+        # Matched lines are REPLACED with a placeholder, not deleted: a reviewer
+        # sentence that happens to share the shape is withheld visibly at its own
+        # position, never silently disappeared. Unicode confusables (fullwidth
+        # colon, homoglyphs, format characters inside the token) and HTML-tag
+        # leaders are recorded residuals, not targets: closing them is an
+        # unbounded chase, and no such line can decide anything, because the
+        # verdict is nonce-bound and parsed from the first line only. See
+        # test/README.md for the stopping rule and the executable row classes.
+        # The pinned locale is load-bearing for non-ASCII leaders, so its health
+        # is probed at runtime through the same matcher the redaction uses, and a
+        # degraded run says so in the posted body instead of degrading silently.
+        FMT='^[[:punct:][:space:][:digit:]]*VERDICT(-[0-9A-Za-z]+)?[[:punct:][:space:]]*:'
+        FORGED='VERDICT-[0-9A-Za-z_-]{8,}[[:punct:][:space:]]*:'
+        PLACEHOLDER='[redacted: this line matched the gate'"'"'s verdict-line format — see the diff for the original text]'
+        redaction_match() { LC_ALL=C.UTF-8 grep -qEi -e "$FMT" -e "$FORGED"; }
+
+        LOCALE_DEGRADED=0
+        if ! printf '\342\200\224 VERDICT: APPROVE\n' | redaction_match 2>/dev/null; then
+          echo "::warning::C.UTF-8 is unavailable to grep on this runner; the redaction ran ASCII-only."
+          LOCALE_DEGRADED=1
+        fi
+
+        REDACTED=0
+        : > "$REVIEW_FILE"
+        while IFS= read -r REVIEW_LINE; do
+          if printf '%s\n' "$REVIEW_LINE" | redaction_match; then
+            printf '%s\n' "$PLACEHOLDER" >> "$REVIEW_FILE"
+            REDACTED=$((REDACTED+1))
+          else
+            printf '%s\n' "$REVIEW_LINE" >> "$REVIEW_FILE"
+          fi
+        done < "$RAW_FILE"
+        rm -f "$RAW_FILE"
+        if [ "$REDACTED" -gt 0 ]; then
+          printf '\n*%s line(s) matching this gate'"'"'s own verdict format were replaced with a placeholder above. The verdict is the one this check reports.*\n' "$REDACTED" >> "$REVIEW_FILE"
+        fi
+        if [ "$LOCALE_DEGRADED" = "1" ]; then
+          printf '\n*redaction ran ASCII-only — this runner lacks C.UTF-8; non-ASCII leader forms were not stripped.*\n' >> "$REVIEW_FILE"
+        fi
+
+        # EXACT match on the whole first line, nonce included. A first line that
+        # merely CONTAINS "APPROVE" is not enough: the diff is attacker-authored
+        # text and a model can be pushed to echo a verdict-shaped line, so the
+        # binding to THIS run is the check.
+        # TRAILING whitespace only, and deliberately NOT leading. The prompt
+        # instructs the model to begin its reply with the verdict line and
+        # "nothing whatsoever before it", so forgiving leading whitespace would
+        # waive a term the prompt states and quietly retire the instruction.
+        # Trailing whitespace is not forbidden anywhere and is invisible, so a
+        # required merge gate must not turn one emitted space into a red check.
+        # This normalisation cannot weaken the binding: every string it newly
+        # accepts still has to carry this run's 128-bit nonce, which is minted
+        # after the diff is fixed and stripped before the review is posted.
+        FIRST_LINE=$(printf '%s\n' "$REVIEW_TEXT" | sed -n '1p' | sed 's/[[:space:]]*$//')
+        if [ "$FIRST_LINE" = "VERDICT-$NONCE: APPROVE" ]; then
+          echo "verdict=APPROVE" >> "$GITHUB_OUTPUT"
+        elif [ "$FIRST_LINE" = "VERDICT-$NONCE: REQUEST_CHANGES" ]; then
+          echo "verdict=REQUEST_CHANGES" >> "$GITHUB_OUTPUT"
+        else
+          # APPEND the reason -- do not call inconclusive(), whose truncating write
+          # would destroy the review text saved above. This is the one failure that
+          # happens AFTER the model produced real findings (a preamble ahead of the
+          # verdict line is enough), and those findings are exactly what the human
+          # who must now review needs. Every copy this action replaced appended
+          # here; consolidation must not drop a defence all nine copies had. The
+          # verdict is still INCONCLUSIVE, and the caller still fails the job on it
+          # -- what is preserved is the text, not the outcome. The nonce strip has
+          # already run on this text, so nothing here re-exposes the marker.
+          echo "::warning::Could not parse a verdict from the first line of the review."
+          echo "verdict=INCONCLUSIVE" >> "$GITHUB_OUTPUT"
+          printf '\n---\n%s\n\nThis is not an approval. A human review is required. The text above is the model'"'"'s unverified output, preserved so its findings are not lost.\n' \
+            "The automated review did not begin with a verdict line bound to this run, so no verdict was recorded." >> "$REVIEW_FILE"
+        fi
