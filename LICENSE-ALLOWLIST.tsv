@@ -1,0 +1,7 @@
+# License-integrity allowlist. One repo per line: full_name<TAB>allowed_spdx<TAB>reason.
+# Every entry needs a reason; entries without one fail the gate by design.
+# Ruling of record: the product decision of 2026-08-24 (four entries, one self-expiring).
+opena2a-org/crypto-census-data	CC-BY-4.0	DOI-bound published dataset (Zenodo 10.5281/zenodo.21791658); CC-BY-4.0 is the published record's own licence; transfers out of the org before 2026-11-13, delete this entry when the transfer lands
+opena2a-org/dvaa-demo-captures	CC-BY-4.0	demo-capture dataset published for independent review and citation (synthetic data only); data precedent
+opena2a-org/mcp-security-checklist	CC-BY-4.0	prose security checklist meant to be reproduced in third-party runbooks with attribution; contains no tool code of ours
+opena2a-standards/awesome-agent-souls	CC-BY-4.0	curated collection of SOUL.md documents; attribution-on-copy carries the provenance its integrity-verified positioning depends on
