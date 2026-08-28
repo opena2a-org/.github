@@ -5,3 +5,4 @@ opena2a-org/crypto-census-data	CC-BY-4.0	DOI-bound published dataset (Zenodo 10.
 opena2a-org/dvaa-demo-captures	CC-BY-4.0	demo-capture dataset published for independent review and citation (synthetic data only); data precedent
 opena2a-org/mcp-security-checklist	CC-BY-4.0	prose security checklist meant to be reproduced in third-party runbooks with attribution; contains no tool code of ours
 opena2a-standards/awesome-agent-souls	CC-BY-4.0	curated collection of SOUL.md documents; attribution-on-copy carries the provenance its integrity-verified positioning depends on
+thebenignhacker/atlas	MIT	personal OSS dashboard outside the org orbit; MIT is the owner's standing licence choice and the file is intact — entry exists for the pre-push gate row, which checks every public repo, while the weekly workflow scans org repos only
