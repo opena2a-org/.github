@@ -12,7 +12,7 @@ up to nine copies at once:
 
 ## Why an action and not a reusable workflow
 
-`Claude Code Review` is a **required status context** on `main` in six repos. A
+`Automated code review` is a **required status context** on `main` in six repos. A
 reusable workflow called at the job level renames its check to
 `<caller-job> / <called-job>`, so that required context would never appear again
 and every PR in all six would block until branch protection was edited in each —
@@ -59,7 +59,7 @@ The caller renders two files, calls this action, then posts and enforces.
 ```yaml
 jobs:
   review:
-    name: Claude Code Review     # <- this string IS the required context. Do not change it.
+    name: Automated code review   # <- this string IS the required context. Do not change it.
     runs-on: ubuntu-latest
     steps:
       # ... build /tmp/system_prompt.txt and /tmp/user_msg.txt ...

@@ -5,14 +5,14 @@ description: >-
 
 # WHY THIS IS AN ACTION AND NOT A REUSABLE WORKFLOW.
 #
-# `Claude Code Review` is a REQUIRED status context on main in several repos.
+# `Automated code review` is a REQUIRED status context on main in several repos.
 # Re-derive the current set instead of trusting any recorded count:
 #
 #   for r in ai-trust agent-runtime-protection oasb nanomind hackmyagent \
 #            secretless-ai agent-identity-management damn-vulnerable-ai-agent \
 #            opena2a-registry; do
 #     printf '%-28s %s\n' "$r" "$(gh api repos/opena2a-org/$r/branches/main/protection \
-#       --jq '.required_status_checks.contexts | map(select(. == "Claude Code Review")) | length')"
+#       --jq '.required_status_checks.contexts | map(select(. == "Automated code review")) | length')"
 #   done
 #
 # A reusable workflow called at the job level renames its check to
