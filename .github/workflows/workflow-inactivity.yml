@@ -1,0 +1,40 @@
+name: workflow inactivity
+
+# GitHub disables every trigger of a workflow after 60 days without repository activity
+# (state `disabled_inactivity`) and sends no notification; a workflow can also be switched off
+# by hand (`disabled_manually`). Weekly and on demand, this run enumerates every unarchived
+# repository of opena2a-org and opena2a-standards and fails on any workflow whose state is not
+# `active`, tracking each finding as one open issue in this repository (bot-authored, labeled
+# `workflow-inactivity`). Details, invariants and the exit rules: scripts/workflow-inactivity.sh.
+#
+# The run's own token reads public repositories only. Private repositories need the
+# `ORG_READ_TOKEN` secret: a token with Actions: read on every repository of both organizations.
+# Until it exists the run fails and its summary lists the repositories it could not read.
+
+on:
+  schedule:
+    - cron: "17 7 * * 1"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Read everything, write nothing (no issues, labels or comments)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Every unarchived repository's workflows are active, or tracked by an open issue
+        env:
+          GH_TOKEN: ${{ secrets.ORG_READ_TOKEN || github.token }}
+          ISSUES_TOKEN: ${{ github.token }}
+          ISSUE_REPO: ${{ github.repository }}
+          DRY_RUN: ${{ inputs.dry_run == true && '1' || '0' }}
+        run: bash scripts/workflow-inactivity.sh
