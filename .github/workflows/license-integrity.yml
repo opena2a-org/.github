@@ -2,14 +2,27 @@ name: license integrity
 
 # Every public, non-archived repo in opena2a-org and opena2a-standards must
 # classify Apache-2.0 on GitHub, unless LICENSE-ALLOWLIST.tsv carries the repo
-# with its allowed SPDX id and a reason. Weekly and on demand; fails loudly on
-# any unexplained classification, including NOASSERTION (a rewritten text) and
-# NONE (no file), so a licence regression cannot accrue silently again.
+# with its allowed SPDX id and a reason. Weekly and on demand; NOASSERTION (a
+# rewritten text) and NONE (no file) are findings like any other id, so a
+# licence regression cannot accrue silently.
+#
+# Each finding is tracked as one open issue in this repository (bot-authored,
+# labeled `license-integrity`), updated on every run and never duplicated. The
+# run fails on a finding no open bot issue tracks, on a tracked finding older
+# than 30 days, on an issue write that fails, and on an organization that
+# cannot be enumerated; it passes when every finding is tracked and young, and
+# its summary then lists each finding with its issue URL. Details, invariants
+# and the exit rules: scripts/license-integrity.sh.
 
 on:
   schedule:
     - cron: "43 6 * * 1"
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Read everything, write nothing (no issues, labels or comments)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -21,41 +34,10 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - name: Every public repo classifies Apache-2.0 or is allowlisted with a reason
-        id: gate
+      - name: Every public repo classifies Apache-2.0 or is allowlisted with a reason, or is tracked by an open issue
         env:
           GH_TOKEN: ${{ secrets.ORG_READ_TOKEN || github.token }}
-        run: |
-          set -uo pipefail
-          FAIL=0
-          : > findings.txt
-          for ORG in opena2a-org opena2a-standards; do
-            gh api "orgs/$ORG/repos?type=public&per_page=100" --paginate \
-              --jq '.[] | select(.archived|not) | [.full_name, (.license.spdx_id // "NONE")] | @tsv' |
-            while IFS=$'\t' read -r FULL SPDX; do
-              if [ "$SPDX" = "Apache-2.0" ]; then continue; fi
-              ROW=$(grep -P "^$FULL\t" LICENSE-ALLOWLIST.tsv || true)
-              if [ -z "$ROW" ]; then
-                echo "FAIL $FULL classifies $SPDX and is not allowlisted" | tee -a findings.txt
-              else
-                ALLOWED=$(printf '%s' "$ROW" | cut -f2)
-                REASON=$(printf '%s' "$ROW" | cut -f3)
-                if [ "$SPDX" != "$ALLOWED" ] || [ -z "$REASON" ]; then
-                  echo "FAIL $FULL classifies $SPDX; allowlist says '$ALLOWED' (reason: '${REASON:-MISSING}')" | tee -a findings.txt
-                else
-                  echo "ok   $FULL $SPDX (allowlisted: $REASON)"
-                fi
-              fi
-            done
-          done
-          if [ -s findings.txt ]; then echo "exit=1" >> "$GITHUB_OUTPUT"; else echo "exit=0" >> "$GITHUB_OUTPUT"; fi
-      - name: Open an issue on findings
-        if: steps.gate.outputs.exit == '1'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh issue create --title "license integrity: findings $(date -u +%F)" \
-            --body "$(printf 'A public repo classifies something other than Apache-2.0 without an allowlist reason.\n\n```\n%s\n```\n' "$(cat findings.txt)")" || true
-      - name: Fail on findings
-        if: steps.gate.outputs.exit == '1'
-        run: exit 1
+          ISSUES_TOKEN: ${{ github.token }}
+          ISSUE_REPO: ${{ github.repository }}
+          DRY_RUN: ${{ inputs.dry_run == true && '1' || '0' }}
+        run: bash scripts/license-integrity.sh
