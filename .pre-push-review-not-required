@@ -1,15 +1,15 @@
-Org profile README repo, plus one composite action (actions/claude-review) that is
+Org profile README repo, plus one composite action (actions/code-review) that is
 SHA-pinned by every consumer. There is no build, no lint and no new-user walk.
 
-There IS a test surface, and it is not optional: actions/claude-review/test/ holds a
+There IS a test surface, and it is not optional: actions/code-review/test/ holds a
 response-shape harness, a mutant suite and a single-mode identity check. Run ALL
 THREE before pushing any change to action.yml, and require every mutant to be caught:
 
-  python3 actions/claude-review/test/harness.py actions/claude-review/action.yml
-  python3 actions/claude-review/test/mutants.py actions/claude-review/action.yml \
-          actions/claude-review/test/harness.py
-  python3 actions/claude-review/test/single_mode_identity.py \
-          actions/claude-review/action.yml
+  python3 actions/code-review/test/harness.py actions/code-review/action.yml
+  python3 actions/code-review/test/mutants.py actions/code-review/action.yml \
+          actions/code-review/test/harness.py
+  python3 actions/code-review/test/single_mode_identity.py \
+          actions/code-review/action.yml
 
 Run them ONE AT A TIME. The action writes fixed /tmp paths, so two suites running at
 once corrupt each other's request and response files; the harness serialises with a
