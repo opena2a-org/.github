@@ -1,6 +1,6 @@
-# Tests for `actions/claude-review`
+# Tests for `actions/code-review`
 
-This action is SHA-pinned by every repo whose `Claude Code Review` gate it powers, and in
+This action is SHA-pinned by every repo whose `Automated code review` gate it powers, and in
 several of them that check is a REQUIRED status context on `main`. A defect here does not fail
 one job; it changes what merges.
 

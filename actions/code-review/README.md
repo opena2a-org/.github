@@ -1,4 +1,4 @@
-# `claude-review` — the shared half of the PR review gate
+# `code-review` — the shared half of the PR review gate
 
 One implementation of the model call that every repo's `pr-review.yml` was
 copy-pasting. Three defects have been found in that call, and each one existed in
@@ -65,7 +65,7 @@ jobs:
       # ... build /tmp/system_prompt.txt and /tmp/user_msg.txt ...
 
       - id: review
-        uses: opena2a-org/.github/actions/claude-review@PIN_A_SHA  # see below
+        uses: opena2a-org/.github/actions/code-review@PIN_A_SHA  # see below
         with:
           anthropic-api-key: SECRET_REFERENCE   # your repo's Anthropic key secret
           system-prompt-file: /tmp/system_prompt.txt
@@ -146,7 +146,7 @@ The caller partitions; the action loops:
 
 ```yaml
       - id: review
-        uses: opena2a-org/.github/actions/claude-review@PIN_A_SHA
+        uses: opena2a-org/.github/actions/code-review@PIN_A_SHA
         with:
           anthropic-api-key: SECRET_REFERENCE
           system-prompt-file: /tmp/system_prompt.txt

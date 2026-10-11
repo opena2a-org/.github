@@ -1,4 +1,4 @@
-name: Claude review call
+name: Automated code review call
 description: >-
   Measure a review request against the model's context window, send it, and
   return a verdict. The shared half of every repo's PR review gate.
